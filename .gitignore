@@ -1,0 +1,115 @@
+Leiningen.gitignore
+# =========================
+# Operating System Files
+# =========================
+
+# OSX
+# =========================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+# =========================
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+*.aps
+*.aux
+*.bak
+*.cache
+*.dll
+#Ignore files built by Visual Studio.
+*.docstates
+*.exe
+*.exp
+*.fls
+*.fdb_latexmk
+*.glg
+*.glo
+*.gls
+*.gz
+*.ist
+*.ilk
+*.js.map
+*.lib
+*.log
+*.ncb
+*.obj
+*.oca
+*.orig
+*.out
+*.pch
+*.pdb
+*.ReSharper
+*.sbr
+*.suo
+*.tlb
+*.tlh
+*.toc
+*.user
+*.vbw
+*.vspscc
+*_i.c
+*_p.c
+[Bb]in
+[Dd]ebug/
+[Nn]owibu/
+[Pp]ublish/
+[Rr]elease*/
+[Ss]tub/
+[Tt]est[Rr]esult*/
+_ReSharper*/
+_sgbak/
+documentation/*.pdf
+documentation/sensors/**/*.pdf
+obj/
+panther.api.XML
+panther.mobile.XML
+#Ignore thumbnails created by Windows.
+Thumbs.db
+x86/
+*.ide
+
+*.sublime-workspace
+
+src/packages/**/*.*
+
+src/.vs/**/*.*
+.vs/
+packages/
+deploy/
+
+*pdf

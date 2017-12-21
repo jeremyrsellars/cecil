@@ -1,0 +1,21 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+			"folder_exclude_patterns":
+			[
+				"compiled",
+				"bin",
+				"obj",
+				"target"
+			],
+			"file_exclude_patterns":
+			[
+				"*.csproj.*",
+				"*.min.js",
+				"*.min.css"
+			]
+		}
+	]
+}
