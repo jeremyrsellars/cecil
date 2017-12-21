@@ -38,3 +38,11 @@ textarea
 .calculated .CodeMirror {
     background-color: rgb(228,228,228);
 }
+
+.cm-plsql-comment {
+    color: gray;
+}
+
+#com-rigsomelight-devcards-main {
+    background-color: white
+}
