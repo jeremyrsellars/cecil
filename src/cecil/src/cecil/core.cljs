@@ -14,13 +14,16 @@
   [:div
    [:h3 "CiCiL performs simple pattern-based transformations from CCL to Oracle SQL."]
    [:ol
-    (map #(vector [:li (string/upper-case %)])
+    (map #(vector :li (string/upper-case %))
       (cts/about-regexes))]
    "It also uses a CKI when available."
-   [:h3 "Usage"]
-   [:ol
-    [:li "Paste your CCL."]
-    [:li "Click Translate."]]])
+   [:div {:key "usage"}
+     [:h3 "Usage"]
+     [:ol
+      (map-indexed #(vector :li {:key %1} %2)
+        ["Paste your CCL."
+         "Click Translate."])]]])
+
 (defn main []
   ;; conditionally start the app based on whether the #main-app-area
   ;; node is on the page
