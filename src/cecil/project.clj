@@ -13,8 +13,9 @@
 
                  ;; need to specify this for sablono
                  ;; when not using devcards
-                 [cljsjs/react "16.2.0-3"]
-                 [cljsjs/react-dom "16.2.0-3"]
+                 [cljsjs/react "15.6.2-0"]
+                 [cljsjs/react-dom "15.6.2-0"]
+                 [cljsjs/react-dom-server "15.6.2-0"]
                  #_[org.omcljs/om "1.0.0-alpha46"]
                  #_[reagent "0.6.0"]
                  ]
