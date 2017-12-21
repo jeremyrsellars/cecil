@@ -36,7 +36,7 @@
                                    ;; started and complied your application.
                                    ;; Comment this out once it no longer serves you.
                                    :open-urls ["http://localhost:3469/cards.html"]}
-                        :compiler { :main       "cecil.core"
+                        :compiler { :main       "cecil.devcards-core"
                                     :asset-path "js/compiled/devcards_out"
                                     :output-to  "resources/public/js/compiled/cecil_devcards.js"
                                     :output-dir "resources/public/js/compiled/devcards_out"
@@ -49,7 +49,7 @@
                                    :output-to  "resources/public/js/compiled/cecil.js"
                                    :output-dir "resources/public/js/compiled/out"
                                    :source-map-timestamp true }}
-                       {:id "prod"
+                       {:id "release"
                         :source-paths ["src"]
                         :compiler {:main       "cecil.core"
                                    :asset-path "js/compiled/out"

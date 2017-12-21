@@ -1,24 +1,13 @@
 (ns cecil.core
   (:require
-   #_[om.core :as om :include-macros true]
    [clojure.string :as string]
-   [clojure.test :refer [testing is]]
    [clojure.pprint :as pprint]
    [sablono.core :as sab :include-macros true]
    [cecil.cki :as cki]
    [cecil.util :as util]
-   [cecil.ccl-to-sql :as cts]
-   [cecil.ccl-to-sql-test]
-   [cecil.cki-test]
-   [cecil.util-test])
-  (:require-macros
-   [devcards.core :as dc :refer [defcard deftest]]))
+   [cecil.ccl-to-sql :as cts]))
 
 (enable-console-print!)
-
-(defcard first-card
-  (sab/html [:div
-             [:h1 "This is your first devcard!"]]))
 
 (defn app
   []
@@ -32,9 +21,6 @@
    [:ol
     [:li "Paste your CCL."]
     [:li "Click Translate."]]])
-
-
-
 (defn main []
   ;; conditionally start the app based on whether the #main-app-area
   ;; node is on the page
@@ -43,7 +29,3 @@
      node)))
 
 (main)
-
-(deftest show
-  (is (nil? cki/cki)
-    "This just shows the CKI mappings.... nothing to worry about"))
