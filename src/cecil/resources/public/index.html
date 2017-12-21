@@ -6,7 +6,70 @@
     <link href="/css/cecil_style.css" rel="stylesheet" type="text/css">
   </head>
   <body>
-    <div id="main-app-area"></div>
-    <script src="/js/compiled/cecil.js" type="text/javascript"></script>
+    <div>
+        <h1>CeCiL - Taming the Famous Lion</h1>
+        <div id="main-app-area"></div>
+        <script src="/js/compiled/cecil.js" type="text/javascript"></script>
+        <style>
+            #com-rigsomelight-devcards-main {display: none;}
+        </style>
+        <script src="/js/compiled/cecil_devcards.js" type="text/javascript"></script>
+        <script type="text/javascript">
+            var semiAutomate = function semiAutomate(){
+                var cclArea = document.getElementById("cclArea")
+                var sqlArea = document.getElementById("sqlArea")
+                try {
+                    sqlArea.value = cecil.ccl_to_sql.translateAll(cclArea.value)
+                } catch (e) {
+                    sqlArea.value = e.toString()
+                }
+            }
+        </script>
+        <button onclick="semiAutomate();" accesskey="t">Translate</button>
+    </div>
+    <div class='tile'>
+        <h3>CCL</h3>
+        <textarea id='cclArea' rows=40 cols=100>
+  select distinct
+    sir.item_id,
+    ocs.catalog_cd,
+    ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd),
+    sir.synonym_id,
+    SYN_PRIMARY = uar_get_code_display(ocs.catalog_cd),
+    ocs.mnemonic,
+    MNEMONIC_TYPE_CD = uar_get_code_display(ocs.mnemonic_type_cd),
+    ITEM_DESC = mi.value
+  from
+    order_catalog_item_r ocir,
+    synonym_item_r sir,
+    order_catalog_synonym ocs,
+    med_identifier mi
+  plan sir
+  where sir.item_id not in (
+    select
+      ocir.item_id
+    from
+      order_catalog_item_r ocir
+    group by ocir.item_id
+    having count(ocir.catalog_cd) > 1
+  )
+  join ocir
+    where ocir.item_id = sir.item_id
+  join ocs
+    where ocs.synonym_id = sir.synonym_id
+    and ocs.catalog_cd != ocir.catalog_cd
+  join mi
+    where mi.item_id = outerjoin(ocir.item_id)
+    and mi.med_product_id = outerjoin(0)
+    and mi.primary_ind = outerjoin(1)
+    and mi.med_identifier_type_cd = outerjoin(value(uar_get_code_by("MEANING",11000,"DESC")))
+  order by sir.item_id
+        </textarea>
+    </div>
+    <div class='tile'>
+        <h3>PL/SQL</h3>
+        <textarea id='sqlArea' rows=40 cols=100>
+        </textarea>
+    </div>
   </body>
 </html>

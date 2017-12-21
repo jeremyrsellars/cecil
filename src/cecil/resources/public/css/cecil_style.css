@@ -3,3 +3,28 @@ code {
   display: block;
   white-space: pre-wrap
 }
+
+
+body::after {
+    content: "";
+    background-image: url(https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg/1920px-Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg);
+    background-size: cover;
+    opacity: 0.3;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    position: absolute;
+    z-index: -1;
+}
+
+
+.tile {
+    display: inline-block;
+};
+
+
+textarea
+{
+    background-color: transparent;
+}

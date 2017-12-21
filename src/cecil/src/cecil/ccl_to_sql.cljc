@@ -104,3 +104,8 @@
           translate-cnvtreal
           translate-cnvtupper]]
   (apply comp fns)))
+
+
+(defn ^:export translateAll
+  [ccl]
+  (translate-all ccl))
