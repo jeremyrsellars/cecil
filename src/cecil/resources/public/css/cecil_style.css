@@ -23,12 +23,13 @@ body::after {
 }
 
 
-.tile {
-    display: inline-block;
-    max-width: calc(50% - 4em);
-    vertical-align: top;
-};
-
+@media (min-width: 1200px) {
+    .tile {
+        display: inline-block;
+        max-width: calc(50% - 4em);
+        vertical-align: top;
+    };
+}
 
 textarea
 {
