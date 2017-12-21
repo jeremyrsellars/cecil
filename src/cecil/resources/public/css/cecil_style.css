@@ -5,11 +5,15 @@ code {
 }
 
 
+body{
+    padding: 1em;
+}
+
 body::after {
     content: "";
     background-image: url(https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg/1920px-Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg);
     background-size: cover;
-    opacity: 0.3;
+    opacity: 0.15;
     top: 0;
     left: 0;
     bottom: 0;
@@ -21,10 +25,16 @@ body::after {
 
 .tile {
     display: inline-block;
+    max-width: calc(50% - 4em);
+    vertical-align: top;
 };
 
 
 textarea
 {
     background-color: transparent;
+}
+
+.calculated .CodeMirror {
+    background-color: rgb(228,228,228);
 }

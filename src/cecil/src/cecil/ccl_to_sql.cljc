@@ -109,3 +109,35 @@
 (defn ^:export translateAll
   [ccl]
   (translate-all ccl))
+
+(defn  ^:export report
+  [ccl]
+  (let [matches (mapcat
+                  #(let [ms (re-seq % ccl)]
+                      (if (string? (first ms))
+                       ms
+                       (map first ms)))
+                  regexes)
+        substitutions (mapv
+                       #(vector % (translate-all %))
+                        matches)]
+    (string/join "\r\n"
+     (flatten
+      ["/**************************************"
+       " * Conversion Report"
+       (str " * " (count substitutions) " substitutions")
+       " * In no particular order:"
+       " */"
+       ""
+       (map
+          (fn [[before after]]
+            ["Before: " before ""
+             "After: " after "" "-------------------------------------------------------------" ""])
+          substitutions)]))))
+
+(defn about-regexes
+  []
+  (map
+    #(-> % str
+        (string/replace #"/\\b|\\s.*" ""))
+    regexes))
