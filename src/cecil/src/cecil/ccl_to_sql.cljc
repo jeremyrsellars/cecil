@@ -179,16 +179,19 @@
 
 (defn string->token
   [s]
-  (assoc
-    (if-let [tt (get token->type s)]
-      {:type tt}
-      (if-let [canonical-keyword (ccl-keywords (keyword s))]
-        {:type :keyword
-         :keyword canonical-keyword}
-        {:type (cond
-                  (string/blank? s)         :whitespace
-                  :else                     :identifier)}))
-    :nodes [s]))    ; consider interning here
+  (if (nil? s)
+    {:type :terminal
+     :nodes []}
+    (assoc
+      (if-let [tt (get token->type s)]
+        {:type tt}
+        (if-let [canonical-keyword (ccl-keywords (keyword s))]
+          {:type :keyword
+           :keyword canonical-keyword}
+          {:type (cond
+                    (string/blank? s)         :whitespace
+                    :else                     :identifier)}))
+      :nodes [s])))    ; consider interning here
 
 
 (defn parse-keyword
@@ -272,14 +275,12 @@
 
 (defn next-token
   [[t1 & rst :as tokens]]
-  (if (empty? tokens)
-    nil
-    (let [ws? (or (valid-string? :whitespace t1)
-                  (valid-string? :comment t1))]
-      (if ws?
-        (assoc-in (next-token rst) [0 :leading-whitespace] t1)
-        [(string->token t1)
-         (vec rst)]))))
+  (let [ws? (or (valid-string? :whitespace t1)
+                (valid-string? :comment t1))]
+    (if ws?
+      (assoc-in (next-token rst) [0 :leading-whitespace] t1) ; remember, next-token is [t rest]
+      [(string->token t1)
+       (vec rst)])))
 
 (defn next-whitespaces-and-comments-as-string
   [tokens]
@@ -317,14 +318,9 @@
            tokens tokens]
       (let [[nt remaining] (next-token tokens)]
         (cond
-          (nil? nt)
+          (token-of-type? nt :rparen :terminal)
           [{:type :expression :sub-type :parenthetical
-            :nodes (ast-nodes parts)}
-           remaining]
-
-          (token-of-type? nt :rparen)
-          [{:type :expression :sub-type :parenthetical
-            :nodes (ast-nodes (conj parts nt))}
+            :nodes (conj parts nt)}
            remaining]
 
           (token-of-type? nt :comma)
@@ -335,7 +331,7 @@
           (and (token-of-type? nt :keyword) (-> nt :keyword (= :select)))
           (let [[sel tokens] (parse-select tokens)]
             (recur
-              (conj sel)
+              (conj parts sel)
               tokens))
 
           ; non-terminal
@@ -355,7 +351,8 @@
          remaining]
 
         ;terminal or empty
-        (some #(% nt) terminal-fns)
+        (or (token-of-type? nt :terminal)
+            (some #(% nt) terminal-fns))
         [{:type :expression
           :nodes (ast-nodes parts)}
          tokens] ; don't eat terminal
@@ -415,14 +412,16 @@
   [tokens]
   (let [[kw tokens] (next-token tokens)
         [ws tokens] (next-whitespaces-and-comments-as-string tokens)
-        [select-list-parsed remaining] (parse-select-list tokens)
+        [select-list-parsed tokens] (parse-select-list tokens)
+        [next-expression remaining] (parse-expression tokens)
         select-list
         {:type :select-list
          :leading-whitespace ws
          :nodes select-list-parsed}]
      [{:type :select
        :nodes [kw
-               select-list]}
+               select-list
+               next-expression]}
       remaining]))
 
 (defn tokenize-and-parse

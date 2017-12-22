@@ -230,7 +230,19 @@
         :alias expression-ITEM_PRIMARY
         :expression expression-fn-call-ocir_catalog_cd}
 
-      from-order_catalog_item_r-ocir {}]
+      from-order_catalog_item_r-ocir
+       {:type :expression,
+        :nodes
+        [{:type :keyword,
+          :keyword :from,
+          :nodes ["from"],
+          :leading-whitespace " "}
+         {:type :identifier,
+          :nodes ["order_catalog_item_r"],
+          :leading-whitespace " "}
+         {:type :identifier,
+          :nodes ["ocir"],
+          :leading-whitespace " "}]}]
   (deftest parse-ccl-breaks-query-into-chunks
    (letfn [(test-parse
               [ccl expected]
@@ -272,7 +284,8 @@
           [keyword-select
            {:type :select-list
             :leading-whitespace " "
-            :nodes [field-definition-ocir_catalog_cd]}]}])
+            :nodes [field-definition-ocir_catalog_cd]}
+           from-order_catalog_item_r-ocir]}])
 
       (test-parse
         "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
@@ -283,7 +296,8 @@
             :leading-whitespace " "
             :nodes [field-definition-ocir_catalog_cd
                     {:type :field-conjunction :nodes [","]}
-                    field-definition-ocir_catalog_cd]}]}])
+                    field-definition-ocir_catalog_cd]}
+           from-order_catalog_item_r-ocir]}])
 
       (test-parse
         "select ocir.catalog_cd,ITEM_PRIMARY=ocir.catalog_cd from order_catalog_item_r ocir"
@@ -294,7 +308,8 @@
             :leading-whitespace " "
             :nodes [field-definition-ocir_catalog_cd
                     {:type :field-conjunction :nodes [","]}
-                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}]}])
+                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}
+           from-order_catalog_item_r-ocir]}])
 
      (test-parse
         "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
@@ -305,7 +320,8 @@
             :leading-whitespace " "
             :nodes [field-definition-ocir_catalog_cd
                     {:type :field-conjunction :nodes [","]}
-                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}]}])
+                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}
+           from-order_catalog_item_r-ocir]}])
 
      (testing "Testing translation"
 
