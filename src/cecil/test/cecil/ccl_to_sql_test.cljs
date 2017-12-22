@@ -1,6 +1,8 @@
 (ns cecil.ccl-to-sql-test
   (:require
    #_[om.core :as om :include-macros true]
+   [clojure.data :refer [diff]]
+   [clojure.spec.alpha :as s]
    [clojure.test :refer [testing is]]
    [clojure.string :as string]
    [clojure.pprint :as pprint]
@@ -161,6 +163,103 @@
     (is-translated-correctly
       "CNVTUPPER (pt.qty),"
       "UPPER(pt.qty) /*CNVTUPPER (pt.qty)*/),")))
+
+(let [keyword-select
+        {:type :keyword
+         :canonical :select
+         :nodes ["select"]}
+
+      symbol-=
+       {:type :equals
+        :nodes ["="]}
+
+      expression-ocir_catalog_cd
+       {:type :expression
+        :nodes [{:type :identifier :nodes ["ocir"]}
+                {:type :qualifying-conjunction :nodes ["."]}
+                {:type :identifier :nodes ["catalog_cd"]}]}
+      field-definition-ocir_catalog_cd
+       {:type :field-definition
+        :nodes [expression-ocir_catalog_cd]
+        :expression expression-ocir_catalog_cd}
+
+      identifier-ITEM_PRIMARY
+       {:type :identifier
+        :nodes ["ITEM_PRIMARY"]}
+
+      field-definition-ocir_catalog_cd-as-ITEM_PRIMARY
+       {:type :field-definition
+        :nodes [identifier-ITEM_PRIMARY symbol-= expression-ocir_catalog_cd]
+        :expression expression-ocir_catalog_cd}
+
+      from-order_catalog_item_r-ocir {}]
+  (deftest parse-ccl-breaks-query-into-chunks
+   (letfn [(test-parse
+              [ccl expected]
+              (let [[actual remaining] (cts/tokenize-and-parse ccl)
+                    [missing extra same] (diff expected actual)]
+                (testing ccl
+                  (is (empty? remaining)
+                    "Extra tokens")
+                  (is (nil? (s/explain-data ::cts/ast-nodes expected))
+                    "Conforms to spec: expected")
+                  (is (nil? (s/explain-data ::cts/ast-nodes actual))
+                    "Conforms to spec: actual")
+                  (is (nil? missing)
+                   "Missing from actual")
+                  (is (nil? extra)
+                   "Extra in actual")
+                  (is (= expected same)
+                   "The same parts are the same")
+                  (is (= expected actual)
+                   "Exact match"))))]
+
+      ; (test-parse
+      ;   "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
+      ;   [{:type :select
+      ;     :nodes
+      ;     [keyword-select
+      ;      {:type :select-list
+      ;       :leading-whitespace " "
+      ;       :nodes [field-definition-ocir_catalog_cd
+      ;               {:type :field-conjunction :nodes [","]}
+      ;               field-definition-ocir_catalog_cd]}]}])
+
+           ; from-order_catalog_item_r-ocir]}])
+
+      (test-parse
+        "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+        [{:type :select
+          :nodes
+          [keyword-select
+           {:type :select-list
+            :leading-whitespace " "
+            :nodes [field-definition-ocir_catalog_cd
+                    {:type :field-conjunction :nodes [","]}
+                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}]}]))))
+
+           ; from-order_catalog_item_r-ocir]}]))))
+      ; (test-parse
+      ;   "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+      ;   [{:type :select
+      ;     :nodes
+      ;     [keyword-select
+      ;      {:type :select-list
+      ;       :leading-whitespace " "
+      ;       :nodes [(let [alias nil
+      ;                     expr expression-ocir_catalog_cd]
+      ;                 {:type :field-definition
+      ;                  :nodes [expr]
+      ;                  :expression expr})
+      ;               {:type :field-conjunction :nodes [","]}
+      ;               (let [alias nil
+      ;                     expr expression-ocir_catalog_cd]
+      ;                 {:type :field-definition
+      ;                  :nodes [alias
+      ;                          {:type :qualifying-conjunction
+      ;                           :nodes ["="]}
+      ;                          expr]
+      ;                  :expression expr})]}]}]))))
 
 
 
