@@ -175,7 +175,9 @@
 (def token->type
   {"." :dot
    "," :comma
-   "=" :equals})
+   "=" :equals
+   "(" :lparen
+   ")" :rparen})
 
 
 (defn string->token
@@ -203,7 +205,8 @@
   (= kw type))
  ([{:keys [type]} kw & types]
   (or (= kw type)
-      (some? (seq (some #(= type %) types))))))
+      (some #(= type %) types)
+      false)))
 
 (defmulti valid-string?
   (fn assert-valid-string-dispatch
@@ -240,14 +243,17 @@
        (string/blank? s)))
 
 (declare parse-select)
+(declare parse-expression)
 
 (defn next-token
   [[t1 & rst :as tokens]]
-  (let [ws? (valid-string? :whitespace t1)]
-    (if ws?
-      (assoc-in (next-token rst) [0 :leading-whitespace] t1)
-      [(string->token t1)
-       rst])))
+  (if (empty? tokens)
+    nil
+    (let [ws? (valid-string? :whitespace t1)]
+      (if ws?
+        (assoc-in (next-token rst) [0 :leading-whitespace] t1)
+        [(string->token t1)
+         rst]))))
 
 ;; parse-* functions generally take `[token]` and return `[the-parsed-thing remaining-tokens]`
 
@@ -264,20 +270,78 @@
               (assoc maybe-dot :type :qualifying-conjunction)
               id)
             remaining2))
-        [(vec expression-definitions) tokens]))))
+        [(if (= 1 (count expression-definitions))
+            (first expression-definitions)
+            {:type :identifier :sub-type :composite
+             :nodes (vec expression-definitions)})
+         tokens]))))
+
+(defn parse-parenthetical
+  "Returns [expression remaining-tokens]"
+  [tokens]
+  (let [[nt tokens] (next-token tokens)]
+    (loop [parts [nt]
+           tokens tokens]
+      (let [[nt remaining] (next-token tokens)]
+        (cond
+          (nil? nt)
+          [{:type :expression :sub-type :parenthetical
+            :nodes (ast-nodes parts)}
+           remaining]
+
+          (token-of-type? nt :rparen)
+          [{:type :expression :sub-type :parenthetical
+            :nodes (ast-nodes (conj parts nt))}
+           remaining]
+
+          (token-of-type? nt :comma)
+          (recur
+            (conj parts nt)
+            remaining)
+
+          (and (token-of-type? nt :keyword) (-> nt :keyword (= :select)))
+          (let [[sel tokens] (parse-select tokens)]
+            (recur
+              (conj sel)
+              tokens))
+
+          ; non-terminal
+          :else
+          (let [[expr remaining] (parse-expression tokens #(token-of-type? % :rparen :comma))]
+              (recur (conj parts expr) remaining)))))))
 
 (defn parse-expression
-  [tokens]
-  (let [[id remaining] (parse-identifier tokens)]
-   [{:type :expression
-     :nodes id}
-    remaining]))
+  [tokens & terminal-fns]
+  (loop [parts []
+         tokens tokens]
+    (let [[nt remaining] (next-token tokens)]
+      (cond
+        (nil? nt)
+        [{:type :expression
+          :nodes parts}
+         remaining]
 
+        ;terminal or empty
+        (some #(% nt) terminal-fns)
+        [{:type :expression
+          :nodes (ast-nodes parts)}
+         tokens] ; don't eat terminal
+
+        ; non-terminal
+        :else
+        (let [[expr remaining]
+              (if (token-of-type? nt :lparen)
+                (parse-parenthetical tokens)
+                (parse-identifier tokens))]
+          (recur
+            (conj parts (ast-node expr))
+            remaining))))))
 
 (defn parse-field-definition
  ([tokens]
-  (let [[expression rst] (parse-expression tokens)]
-    (println :pfd-1 :map expression)
+  (let [[expression rst] (parse-expression tokens #(token-of-type? % :equals :comma)
+                                                  #(-> % :keyword (= :from)))]
+
     (parse-field-definition
       [{:type :field-definition
         :nodes [(ast-node expression)]
@@ -285,14 +349,13 @@
       rst)))
 
  ([field-definitions tokens]
-  (println :pfd :fd-2 :vec field-definitions)
   (let [[nt remaining] (next-token tokens)]
       (if (token-of-type? nt :equals)
         (let [[part2 remaining2] (parse-field-definition remaining)
               ;[part2 remaining3] (parse-field-definition remaining2)
-              {:keys [value], alias :expression} (first field-definitions)]
+              {:keys [nodes], alias :expression} (first field-definitions)]
           [{:type :field-definition
-            :nodes (ast-nodes (into value (get part2 :nodes)))
+            :nodes (ast-nodes (into (conj nodes nt) (get part2 :nodes)))
             :alias alias
             :expression (get part2 :expression)}
            remaining2])
@@ -301,14 +364,11 @@
 (defn parse-select-list
  ([tokens] ; parse the first field definition, then recurse
   (let [[fd remaining] (parse-field-definition tokens)]
-    (println :psl/fd-1 :map fd)
     (parse-select-list [fd] remaining)))
  ([field-definitions tokens]
-  (println :psl/fd-2 :vec field-definitions)
   (let [[nt remaining] (next-token tokens)]
       (if (token-of-type? nt :comma)
         (let [[fd remaining2] (parse-field-definition remaining)]
-          ;(println :psl/fd2 :map fd)
           (parse-select-list
             (conj field-definitions
               (assoc nt :type :field-conjunction)

@@ -173,11 +173,22 @@
        {:type :equals
         :nodes ["="]}
 
+      symbol-lparen
+       {:type :lparen
+        :nodes ["("]}
+
+      symbol-rparen
+       {:type :rparen
+        :nodes [")"]}
+
       expression-ocir_catalog_cd
        {:type :expression
-        :nodes [{:type :identifier :nodes ["ocir"]}
-                {:type :qualifying-conjunction :nodes ["."]}
-                {:type :identifier :nodes ["catalog_cd"]}]}
+        :nodes [{:type :identifier
+                 :sub-type :composite
+                 :nodes
+                  [{:type :identifier :nodes ["ocir"]}
+                   {:type :qualifying-conjunction :nodes ["."]}
+                   {:type :identifier :nodes ["catalog_cd"]}]}]}
       field-definition-ocir_catalog_cd
        {:type :field-definition
         :nodes [expression-ocir_catalog_cd]
@@ -187,10 +198,31 @@
        {:type :identifier
         :nodes ["ITEM_PRIMARY"]}
 
+      expression-ITEM_PRIMARY
+       {:type :expression
+        :nodes [identifier-ITEM_PRIMARY]}
+
       field-definition-ocir_catalog_cd-as-ITEM_PRIMARY
        {:type :field-definition
-        :nodes [identifier-ITEM_PRIMARY symbol-= expression-ocir_catalog_cd]
+        :nodes [expression-ITEM_PRIMARY symbol-= expression-ocir_catalog_cd]
+        :alias expression-ITEM_PRIMARY
         :expression expression-ocir_catalog_cd}
+
+      identifier-UAR_GETCODE_DISPLAY
+       {:type :identifier
+        :nodes ["uar_get_code_display"]}
+
+      expression-fn-call-ocir_catalog_cd
+       {:type :expression
+        :nodes [identifier-UAR_GETCODE_DISPLAY
+                {:type :expression :sub-type :parenthetical
+                 :nodes [symbol-lparen expression-ocir_catalog_cd symbol-rparen]}]}
+
+      field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY
+       {:type :field-definition
+        :nodes [expression-ITEM_PRIMARY symbol-= expression-fn-call-ocir_catalog_cd]
+        :alias expression-ITEM_PRIMARY
+        :expression expression-fn-call-ocir_catalog_cd}
 
       from-order_catalog_item_r-ocir {}]
   (deftest parse-ccl-breaks-query-into-chunks
@@ -209,25 +241,43 @@
                    "Missing from actual")
                   (is (nil? extra)
                    "Extra in actual")
-                  (is (= expected same)
-                   "The same parts are the same")
+                  ; (is (= expected same)
+                  ;  "The same parts are the same")
                   (is (= expected actual)
                    "Exact match"))))]
 
-      ; (test-parse
-      ;   "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
-      ;   [{:type :select
-      ;     :nodes
-      ;     [keyword-select
-      ;      {:type :select-list
-      ;       :leading-whitespace " "
-      ;       :nodes [field-definition-ocir_catalog_cd
-      ;               {:type :field-conjunction :nodes [","]}
-      ;               field-definition-ocir_catalog_cd]}]}])
-
-           ; from-order_catalog_item_r-ocir]}])
+      (test-parse
+        "select ocir.catalog_cd from order_catalog_item_r ocir"
+        [{:type :select
+          :nodes
+          [keyword-select
+           {:type :select-list
+            :leading-whitespace " "
+            :nodes [field-definition-ocir_catalog_cd]}]}])
 
       (test-parse
+        "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
+        [{:type :select
+          :nodes
+          [keyword-select
+           {:type :select-list
+            :leading-whitespace " "
+            :nodes [field-definition-ocir_catalog_cd
+                    {:type :field-conjunction :nodes [","]}
+                    field-definition-ocir_catalog_cd]}]}])
+
+      (test-parse
+        "select ocir.catalog_cd,ITEM_PRIMARY=ocir.catalog_cd from order_catalog_item_r ocir"
+        [{:type :select
+          :nodes
+          [keyword-select
+           {:type :select-list
+            :leading-whitespace " "
+            :nodes [field-definition-ocir_catalog_cd
+                    {:type :field-conjunction :nodes [","]}
+                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}]}])
+
+     (test-parse
         "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
         [{:type :select
           :nodes
@@ -236,31 +286,7 @@
             :leading-whitespace " "
             :nodes [field-definition-ocir_catalog_cd
                     {:type :field-conjunction :nodes [","]}
-                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}]}]))))
-
-           ; from-order_catalog_item_r-ocir]}]))))
-      ; (test-parse
-      ;   "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
-      ;   [{:type :select
-      ;     :nodes
-      ;     [keyword-select
-      ;      {:type :select-list
-      ;       :leading-whitespace " "
-      ;       :nodes [(let [alias nil
-      ;                     expr expression-ocir_catalog_cd]
-      ;                 {:type :field-definition
-      ;                  :nodes [expr]
-      ;                  :expression expr})
-      ;               {:type :field-conjunction :nodes [","]}
-      ;               (let [alias nil
-      ;                     expr expression-ocir_catalog_cd]
-      ;                 {:type :field-definition
-      ;                  :nodes [alias
-      ;                          {:type :qualifying-conjunction
-      ;                           :nodes ["="]}
-      ;                          expr]
-      ;                  :expression expr})]}]}]))))
-
+                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}]}]))))
 
 
 (defcard overall-translation
@@ -303,3 +329,14 @@
               order by sir.item_id ")
                 #"\n" "\r\n")]))
 
+(deftest token-of-type-tests
+  (let [token {:type :abc :nodes ["abc"]}]
+    (is (cts/token-of-type? token :abc))
+    (is (cts/token-of-type? token :abc :a))
+    (is (cts/token-of-type? token :abc :a :b))
+    (is (cts/token-of-type? token :a :abc))
+    (is (cts/token-of-type? token :b :a :abc))
+
+    (is (not (cts/token-of-type? token :a)))
+    (is (not (cts/token-of-type? token :a :b)))
+    (is (not (cts/token-of-type? token :a :b :c)))))
