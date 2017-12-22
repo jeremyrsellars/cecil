@@ -328,7 +328,8 @@
             (conj parts nt)
             remaining)
 
-          (and (token-of-type? nt :keyword) (-> nt :keyword (= :select)))
+          (and (token-of-type? nt :keyword)
+               (-> nt :keyword (= :select)))
           (let [[sel tokens] (parse-select tokens)]
             (recur
               (conj parts sel)
@@ -413,7 +414,7 @@
   (let [[kw tokens] (next-token tokens)
         [ws tokens] (next-whitespaces-and-comments-as-string tokens)
         [select-list-parsed tokens] (parse-select-list tokens)
-        [next-expression remaining] (parse-expression tokens)
+        [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
         select-list
         {:type :select-list
          :leading-whitespace ws
@@ -481,6 +482,7 @@
                   (and (= sub-type :parenthetical)
                        (= type :expression))))
               false))
+
          (simplify-parenthetical
            [{:keys [type sub-type nodes] :as outer}]
            (let [inner (first nodes)
@@ -491,14 +493,23 @@
 
          (simplify-parenthetical-expression
           [{:keys [type sub-type nodes] :as ast-node}]
-          (cond
-            (or (not (is-parenthetical-expression? ast-node))
-                (not= 1 (count nodes))
-                (not (is-parenthetical-expression? (-> ast-node :nodes first))))
-            ast-node
+          (let [non-paren-nodes (remove #(token-of-type? % :lparen :rparen) nodes)]
+            (when (is-parenthetical-expression? ast-node)
+              (println ::spe
+                    (is-parenthetical-expression? ast-node)
+                    (= 1 (count non-paren-nodes)) (count non-paren-nodes)
+                    (is-parenthetical-expression? (first non-paren-nodes))
+                    (emit-string [ast-node]))
+              (doall
+                    (map-indexed println non-paren-nodes)))
+            (cond
+              (or (not (is-parenthetical-expression? ast-node))
+                  (not= 1 (count non-paren-nodes))
+                  (not (is-parenthetical-expression? (first non-paren-nodes))))
+              ast-node
 
-            :else
-            (simplify-parenthetical ast-node)))]
+              :else
+              (simplify-parenthetical ast-node))))]
 
   (defn simplify-parenthetical-expressions
     [ast-nodes]
@@ -513,8 +524,9 @@
   (let [[tokens remaining] (tokenize-and-parse sql)
         simplified         (->> tokens
                                 simplify-parenthetical-expressions)
-        sql                (emit-string [simplified remaining])]
-    (translate-all sql)))
+        simplified-sql     (emit-string [simplified remaining])]
+;    (println ::simplified (if (= sql simplified-sql) "same" "changed") simplified-sql)
+    (translate-all simplified-sql)))
 
 
 (defn ccl->sql
