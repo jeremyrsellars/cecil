@@ -96,6 +96,7 @@
             try {
                 sqlOrError = cecil.ccl_to_sql.translateAll(ccl)
             } catch (e) {
+                console.error(e)
                 sqlOrError = e.toString()
             }
             sqlCM.setValue(sqlOrError);
