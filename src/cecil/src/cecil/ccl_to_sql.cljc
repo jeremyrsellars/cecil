@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as string]
    [clojure.spec.alpha :as s]
+   [clojure.pprint :as pprint]
    [clojure.walk :as walk]
    [cecil.cki :as cki]
    [cecil.util :as util]))
@@ -167,14 +168,31 @@
 
 (def ccl-keywords
  #{:select
-   :from})
+   :from
+   :and
+   :or
+   :where
+   :plan
+   :join
+   ;:order :group :by  ; somehwere else because of whitespace
+   :having})
 
-(def token->type
+
+(def unomynous-token->type
   {"." :dot
    "," :comma
    "=" :equals
+   "!=" :not-equals
    "(" :lparen
    ")" :rparen})
+
+(defn token->type
+  [s]
+  (or
+    (get unomynous-token->type s)
+    (cond
+      (re-find #"(?i)group(?:\s+by)?" s) :group-by
+      (re-find #"(?i)order\s+by" s) :order-by)))
 
 
 (defn string->token
@@ -183,7 +201,7 @@
     {:type :terminal
      :nodes []}
     (assoc
-      (if-let [tt (get token->type s)]
+      (if-let [tt (token->type s)]
         {:type tt}
         (if-let [canonical-keyword (ccl-keywords (keyword s))]
           {:type :keyword
@@ -513,8 +531,8 @@
 
 (defn simplify-sql
   [sql]
-  (let [[tokens remaining] (tokenize-and-parse sql)
-        simplified         (->> tokens
+  (let [[ast remaining] (tokenize-and-parse sql)
+        simplified         (->> ast
                                 simplify-parenthetical-expressions)
         simplified-sql     (emit-string [simplified remaining])]
     (translate-all simplified-sql)))
@@ -522,11 +540,17 @@
 
 (defn ccl->sql
   [ccl]
-  (let [[tokens remaining] (tokenize-and-parse ccl)
-        translated-tokens  (translate-field-aliases tokens)
-        sql                (emit-string [translated-tokens remaining])
-        translated-sql     (translate-all sql)]
-    (simplify-sql translated-sql)))
+  (let [[ast remaining] (tokenize-and-parse ccl)
+        translated-ast  (translate-field-aliases ast)
+        sql             (emit-string [translated-ast remaining])
+        translated-sql  (translate-all sql)
+        simplified-sql  (simplify-sql translated-sql)]
+    (str
+      simplified-sql
+      "\r\n----------------------------------------------------------\r\n"
+      (with-out-str
+        (pprint/pprint
+          (tokenize-and-parse simplified-sql))))))
 
 (defn ^:export translateAll
   [ccl]

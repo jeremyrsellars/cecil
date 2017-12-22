@@ -1,6 +1,7 @@
 (ns cecil.util-test
   (:require
    #_[om.core :as om :include-macros true]
+   [clojure.string :as string]
    [clojure.test :refer [testing is]]
    [clojure.pprint :as pprint]
    [sablono.core :as sab :include-macros true]
@@ -12,7 +13,11 @@
 (deftest tokenized-correctly
   (letfn [(is-tokenized-correctly [s tokens]
             (testing s
-              (is (= tokens (util/tokenize s)))))]
+              (is (= tokens (util/tokenize s)))))
+          (is-tokenized-correctly2 [tokens]
+            (is-tokenized-correctly
+              (string/join "" tokens)
+              tokens))]
 
     (is-tokenized-correctly
        "uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")"
@@ -24,7 +29,10 @@
 
     (is-tokenized-correctly
        "1 /*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"
-       ["1" " " "/*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"])))
+       ["1" " " "/*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"])
+
+    (is-tokenized-correctly2
+       ["select" " " "1" " " "from" " " "x" " " "group" "group by" " " "1" " " "order      by" " " "1"])))
 
 
 (deftest whitespace-canonicalized-correctly
