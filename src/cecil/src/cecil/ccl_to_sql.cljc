@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as string]
    [clojure.spec.alpha :as s]
+   [clojure.walk :as walk]
    [cecil.cki :as cki]
    [cecil.util :as util]))
 
@@ -107,10 +108,6 @@
   (apply comp fns)))
 
 
-(defn ^:export translateAll
-  [ccl]
-  (translate-all ccl))
-
 (defn  ^:export report
   [ccl]
   (let [matches (mapcat
@@ -209,7 +206,7 @@
       false)))
 
 (defmulti valid-string?
-  (fn assert-valid-string-dispatch
+  (fn valid-string-dispatch
     [kw value]
     kw))
 
@@ -232,6 +229,11 @@
   (assert (valid-string? kw s))
   s)
 
+(defn assert-valid-token
+  [kw token]
+  (assert (valid-token? kw token))
+  token)
+
 (defmethod valid-string? :whitespace
   [_ s]
   (and (string? s)
@@ -242,6 +244,29 @@
   (and (string? s)
        (string/blank? s)))
 
+(defmethod valid-string? :comment
+  [_ s]
+  (and (string? s)
+       (or (string/starts-with? s "--")
+           (string/starts-with? s "/*")
+           (string/starts-with? s ";"))))
+
+
+
+(defn is-whitespace-or-comment
+  [s]
+  (or (valid-string? :whitespace s)
+      (valid-string? :comment s)))
+
+(defn canonical-whitespace-and-comments
+  [s]
+  (util/canonical-whitespace ; a second-pass for consecutive tokens
+    (string/replace s util/tokens-regex
+     #(if (is-whitespace-or-comment %)
+        " "
+        %))))
+
+
 (declare parse-select)
 (declare parse-expression)
 
@@ -249,7 +274,8 @@
   [[t1 & rst :as tokens]]
   (if (empty? tokens)
     nil
-    (let [ws? (valid-string? :whitespace t1)]
+    (let [ws? (or (valid-string? :whitespace t1)
+                  (valid-string? :comment t1))]
       (if ws?
         (assoc-in (next-token rst) [0 :leading-whitespace] t1)
         [(string->token t1)
@@ -379,12 +405,12 @@
 
 
 (defn parse-select
-  [[t1 ws & rst :as tokens]]
-  (let [kw (parse-keyword (assert-valid-string :select t1))
-        [select-list-parsed remaining] (parse-select-list rst)
+  [tokens]
+  (let [[kw tokens] (next-token tokens)
+        [select-list-parsed remaining] (parse-select-list tokens)
         select-list
         {:type :select-list
-         :leading-whitespace (assert-valid-string :whitespace ws)
+         ;:leading-whitespace (assert-valid-string :whitespace ws)
          :nodes select-list-parsed}]
      [{:type :select
        :nodes [kw
@@ -397,3 +423,57 @@
         [select-ast remaining] (parse-select tokens)]
     [[select-ast]
      remaining]))
+
+(letfn [(emit-leading-whitespace-and-tokens [x]
+          (cond (map? x)          [(:leading-whitespace x) (:nodes x)]
+                (string? x)       x
+                (vector? x)       x
+                (seq? x)          x))]
+  (defn emit-tokens
+    [ast-nodes]
+    (->> ast-nodes
+         (walk/prewalk emit-leading-whitespace-and-tokens)
+         flatten
+         (filter some?)))
+
+  (defn emit-string
+    [ast-nodes]
+    (->> ast-nodes
+         emit-tokens
+         (string/join ""))))
+
+(let [as {:type :keyword
+          :leading-whitespace " "
+          :nodes ["AS"]}]
+ (letfn [(alias-rearranger
+           [{:keys [expression alias] :as n}]
+           (let [pre-ws1 (get-in alias      [:nodes 0 :leading-whitespace])
+                 pre-ws2 (get-in expression [:nodes 0 :leading-whitespace])
+                 pre-ws (or pre-ws1 pre-ws2)]
+              (cond-> [(assoc-in expression [:nodes 0 :leading-whitespace] pre-ws)]
+                alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))))
+
+         (change-alias
+          [ast-node]
+          (if-not (= :field-definition (:type ast-node))
+            ast-node
+            (alias-rearranger ast-node)))]
+
+  (defn translate-field-aliases
+    [ast-nodes]
+    (->> ast-nodes
+         (walk/prewalk change-alias)
+         flatten
+         (filter some?)))))
+
+
+(defn ccl->sql
+  [ccl]
+  (let [[tokens remaining] (tokenize-and-parse ccl)
+        x                  (translate-field-aliases tokens)
+        sql                (emit-string [x remaining])]
+    (translate-all sql)))
+
+(defn ^:export translateAll
+  [ccl]
+  (ccl->sql ccl))

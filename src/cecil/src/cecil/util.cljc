@@ -2,7 +2,8 @@
   (:require [clojure.string :as string]))
 
 (def tokens-regex
-  #"\"(?:\"\"|[^\"]+)+\"|'(?:''|[^']+)+'|--[^\r\n]*|/\*(?:(?!\*/)[\s\S])*\*/|\s+|\w+|.")
+  #"\"(?:\"\"|[^\"]+)+\"|'(?:''|[^']+)+'|--[^\r\n]*|;[^\r\n]*|/\*(?:(?!\*/)[\s\S])*\*/|\s+|\w+|.")
+  ; ccl also uses ;`` as a line comment
 
 (defn tokenize
   [s]

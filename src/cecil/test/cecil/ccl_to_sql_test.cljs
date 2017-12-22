@@ -6,6 +6,7 @@
    [clojure.test :refer [testing is]]
    [clojure.string :as string]
    [clojure.pprint :as pprint]
+   [clojure.walk :as walk]
    [sablono.core :as sab :include-macros true]
    [cecil.cki :as cki]
    [cecil.util :as util]
@@ -17,14 +18,19 @@
   (is (not (empty? cki/cki))))
 
 
+(defn canonical=
+  [a b]
+  (= (cts/canonical-whitespace-and-comments a)
+     (cts/canonical-whitespace-and-comments b)))
+
 (defn make-is-translated-correctly
   [test-name test-1 ccl sql]
   (testing test-name
-    (is (= (util/canonical-whitespace sql)
-           (util/canonical-whitespace (test-1 ccl)))
+    (is (= (cts/canonical-whitespace-and-comments sql)
+           (cts/canonical-whitespace-and-comments (test-1 ccl)))
       (str ccl "  yields-> " (test-1 ccl)))
-    (is (= (util/canonical-whitespace sql)
-           (util/canonical-whitespace (cts/translate-all ccl)))
+    (is (= (cts/canonical-whitespace-and-comments sql)
+           (cts/canonical-whitespace-and-comments (cts/translate-all ccl)))
       (str ccl "  yields-> " (cts/translate-all ccl)))))
 
 ;; uar_get_code_by
@@ -231,8 +237,8 @@
               (let [[actual remaining] (cts/tokenize-and-parse ccl)
                     [missing extra same] (diff expected actual)]
                 (testing ccl
-                  (is (empty? remaining)
-                    "Extra tokens")
+                  ; (is (empty? remaining)
+                  ;   "Extra tokens")
                   (is (nil? (s/explain-data ::cts/ast-nodes expected))
                     "Conforms to spec: expected")
                   (is (nil? (s/explain-data ::cts/ast-nodes actual))
@@ -244,7 +250,20 @@
                   ; (is (= expected same)
                   ;  "The same parts are the same")
                   (is (= expected actual)
-                   "Exact match"))))]
+                   "Exact match")
+                  (is (= (util/tokenize ccl)
+                         (cts/emit-tokens [actual remaining]))))))
+           (test-translate
+              [ccl expected-sql]
+              (let [[tokens remaining] (cts/tokenize-and-parse ccl)
+                    x      (cts/translate-field-aliases tokens)
+                    actual-sql (cts/emit-string [x remaining])]
+                (is (= (cts/canonical-whitespace-and-comments expected-sql)
+                       (cts/canonical-whitespace-and-comments actual-sql))
+                  (str ccl
+                       " -> "
+                       expected-sql))))]
+
 
       (test-parse
         "select ocir.catalog_cd from order_catalog_item_r ocir"
@@ -286,7 +305,24 @@
             :leading-whitespace " "
             :nodes [field-definition-ocir_catalog_cd
                     {:type :field-conjunction :nodes [","]}
-                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}]}]))))
+                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}]}])
+
+     (test-translate
+        "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+        "select ocir.catalog_cd,uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY from order_catalog_item_r ocir")
+
+     (test-translate
+        "select /*multi-line
+          comment*/
+          ocir.catalog_cd, -- sql line comment
+          ; ccl line comment
+          ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+        "select /*multi-line
+          comment*/
+          ocir.catalog_cd, -- sql line comment
+          ; ccl line comment
+          uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
+          from order_catalog_item_r ocir"))))
 
 
 (defcard overall-translation
