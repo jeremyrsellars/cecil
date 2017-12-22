@@ -172,7 +172,7 @@
 
 (let [keyword-select
         {:type :keyword
-         :canonical :select
+         :keyword :select
          :nodes ["select"]}
 
       symbol-=
@@ -307,11 +307,13 @@
                     {:type :field-conjunction :nodes [","]}
                     field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}]}])
 
-     (test-translate
+     (testing "Testing translation"
+
+      (test-translate
         "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
         "select ocir.catalog_cd,uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY from order_catalog_item_r ocir")
 
-     (test-translate
+      (test-translate
         "select /*multi-line
           comment*/
           ocir.catalog_cd, -- sql line comment
@@ -322,7 +324,7 @@
           ocir.catalog_cd, -- sql line comment
           ; ccl line comment
           uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
-          from order_catalog_item_r ocir"))))
+          from order_catalog_item_r ocir")))))
 
 
 (defcard overall-translation

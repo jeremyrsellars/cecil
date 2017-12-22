@@ -195,7 +195,7 @@
   [s]
   {:type :keyword
    :nodes [s]
-   :canonical (keyword (string/lower-case s))})
+   :keyword (keyword (string/lower-case s))})
 
 (defn token-of-type?
  ([{:keys [type]} kw]
@@ -279,7 +279,14 @@
       (if ws?
         (assoc-in (next-token rst) [0 :leading-whitespace] t1)
         [(string->token t1)
-         rst]))))
+         (vec rst)]))))
+
+(defn next-whitespaces-and-comments-as-string
+  [tokens]
+  (let [[ws-or-comments remaining] (split-with is-whitespace-or-comment tokens)]
+    nil
+    [(string/join "" ws-or-comments)
+     (vec remaining)]))
 
 ;; parse-* functions generally take `[token]` and return `[the-parsed-thing remaining-tokens]`
 
@@ -407,10 +414,11 @@
 (defn parse-select
   [tokens]
   (let [[kw tokens] (next-token tokens)
+        [ws tokens] (next-whitespaces-and-comments-as-string tokens)
         [select-list-parsed remaining] (parse-select-list tokens)
         select-list
         {:type :select-list
-         ;:leading-whitespace (assert-valid-string :whitespace ws)
+         :leading-whitespace ws
          :nodes select-list-parsed}]
      [{:type :select
        :nodes [kw
@@ -464,15 +472,59 @@
     (->> ast-nodes
          (walk/prewalk change-alias)
          flatten
+         (filter some?))))
+
+ (letfn [(is-parenthetical-expression?
+            [ast-node]
+            (if (associative? ast-node)
+              (let [{:keys [type sub-type nodes]} ast-node]
+                (boolean
+                  (and (= sub-type :parenthetical)
+                       (= type :expression))))
+              false))
+         (simplify-parenthetical
+           [{:keys [type sub-type nodes] :as outer}]
+           (let [inner (first nodes)
+                 pre-ws-outer (get outer :leading-whitespace)
+                 pre-ws-inner (get inner :leading-whitespace)
+                 pre-ws (str pre-ws-outer pre-ws-inner)]
+              (assoc inner :leading-whitespace pre-ws)))
+
+         (simplify-parenthetical-expression
+          [{:keys [type sub-type nodes] :as ast-node}]
+          (cond
+            (or (not (is-parenthetical-expression? ast-node))
+                (not= 1 (count nodes))
+                (not (is-parenthetical-expression? (-> ast-node :nodes first))))
+            ast-node
+
+            :else
+            (simplify-parenthetical ast-node)))]
+
+  (defn simplify-parenthetical-expressions
+    [ast-nodes]
+    (->> ast-nodes
+         (walk/prewalk simplify-parenthetical-expression)
+         flatten
          (filter some?)))))
+
+
+(defn simplify-sql
+  [sql]
+  (let [[tokens remaining] (tokenize-and-parse sql)
+        simplified         (->> tokens
+                                simplify-parenthetical-expressions)
+        sql                (emit-string [simplified remaining])]
+    (translate-all sql)))
 
 
 (defn ccl->sql
   [ccl]
   (let [[tokens remaining] (tokenize-and-parse ccl)
-        x                  (translate-field-aliases tokens)
-        sql                (emit-string [x remaining])]
-    (translate-all sql)))
+        translated-tokens  (translate-field-aliases tokens)
+        sql                (emit-string [translated-tokens remaining])
+        translated-sql     (translate-all sql)]
+    (simplify-sql translated-sql)))
 
 (defn ^:export translateAll
   [ccl]
