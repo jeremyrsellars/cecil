@@ -32,6 +32,7 @@
               :builds [{:id "devcards"
                         :source-paths ["src" "test"]
                         :figwheel { :devcards true  ;; <- note this
+                                    :on-jsload "cecil.core/on-js-reload"
                                    ;; :open-urls will pop open your application
                                    ;; in the default browser once Figwheel has
                                    ;; started and complied your application.

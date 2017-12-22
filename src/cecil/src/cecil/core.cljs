@@ -32,3 +32,8 @@
      node)))
 
 (main)
+
+
+(defn on-js-reload []
+  (when-let [f js/onReload]
+    (f)))
