@@ -99,7 +99,7 @@
   cnvtreal-regex
   cnvtupper-regex])
 
-(def translate-all
+(def replace-all
  (let [fns
          [translate-uar_get_code_by
           translate-uar_get_code_display
@@ -118,7 +118,7 @@
                        (map first ms)))
                   regexes)
         substitutions (mapv
-                       #(vector % (translate-all %))
+                       #(vector % (replace-all %))
                         matches)]
     (string/join "\r\n"
      (flatten
@@ -480,10 +480,10 @@
                 alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))))
 
          (change-alias
-          [ast-node]
-          (if-not (= :field-definition (:type ast-node))
-            ast-node
-            (alias-rearranger ast-node)))]
+          [{:keys [type] :as ast-node}]
+          (if (= type :field-definition)
+            (alias-rearranger ast-node)
+            ast-node))]
 
   (defn translate-field-aliases
     [ast-nodes]
@@ -535,23 +535,22 @@
         simplified         (->> ast
                                 simplify-parenthetical-expressions)
         simplified-sql     (emit-string [simplified remaining])]
-    (translate-all simplified-sql)))
+    (replace-all simplified-sql)))
 
 
-(defn ccl->sql
+(defn ccl->sql-and-report
   [ccl]
-  (let [[ast remaining] (tokenize-and-parse ccl)
+  (let [[ast remaining] (tokenize-and-parse  (replace-all ccl))
         translated-ast  (translate-field-aliases ast)
-        sql             (emit-string [translated-ast remaining])
-        translated-sql  (translate-all sql)
-        simplified-sql  (simplify-sql translated-sql)]
-    (str
-      simplified-sql
-      "\r\n----------------------------------------------------------\r\n"
-      (with-out-str
+        translated-sql  (emit-string [translated-ast remaining])
+        ; simplified-sql  (simplify-sql translated-sql)
+        sql translated-sql]
+    [sql
+     (with-out-str
         (pprint/pprint
-          (tokenize-and-parse simplified-sql))))))
+          (tokenize-and-parse sql)))]))
 
 (defn ^:export translateAll
   [ccl]
-  (ccl->sql ccl))
+  (let [[sql report] (ccl->sql-and-report ccl)]
+    sql))

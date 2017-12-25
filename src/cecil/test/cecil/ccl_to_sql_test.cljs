@@ -12,10 +12,14 @@
    [cecil.util :as util]
    [cecil.ccl-to-sql :as cts])
   (:require-macros
-   [devcards.core :as dc :refer [defcard deftest]]))
+   [devcards.core :as dc :refer [defcard deftest]]
+   [cecil.test-macros :refer [insert-file-contents-string]]))
 
 (deftest cki-contents
   (is (not (empty? cki/cki))))
+
+(def detail-1930-ccl (insert-file-contents-string "resources/1930/detail.ccl"))
+(def detail-1930-sql (insert-file-contents-string "resources/1930/detail.sql"))
 
 
 (defn canonical=
@@ -30,8 +34,8 @@
            (cts/canonical-whitespace-and-comments (test-1 ccl)))
       (str ccl "  yields-> " (test-1 ccl)))
     (is (= (cts/canonical-whitespace-and-comments sql)
-           (cts/canonical-whitespace-and-comments (cts/translate-all ccl)))
-      (str ccl "  yields-> " (cts/translate-all ccl)))))
+           (cts/canonical-whitespace-and-comments (cts/replace-all ccl)))
+      (str ccl "  yields-> " (cts/replace-all ccl)))))
 
 ;; uar_get_code_by
 
@@ -244,7 +248,11 @@
           :nodes ["ocir"],
           :leading-whitespace " "}]}]
   (deftest parse-ccl-breaks-query-into-chunks
-   (letfn [(test-parse
+   (letfn [(sql-fragments [s]
+            (->>
+              (string/split (string/trim (or s "")) #"(?i)(?=\b(?:select|from|plan|join|where|group|order|go|and|on)|,)")
+              (map string/trim)))
+           (test-parse
               [ccl expected]
               (let [[actual remaining] (cts/tokenize-and-parse ccl)
                     [missing extra same] (diff expected actual)]
@@ -265,88 +273,112 @@
                    "Exact match")
                   (is (= (util/tokenize ccl)
                          (cts/emit-tokens [actual remaining]))))))
-           (test-translate
-              [ccl expected-sql]
+ 
+           (test-translate-1
+              [test-name ccl expected-sql]
               (let [[tokens remaining] (cts/tokenize-and-parse ccl)
                     x      (cts/translate-field-aliases tokens)
                     actual-sql (cts/emit-string [x remaining])]
+               (testing test-name
                 (is (= (cts/canonical-whitespace-and-comments expected-sql)
                        (cts/canonical-whitespace-and-comments actual-sql))
                   (str ccl
                        " -> "
-                       expected-sql))))]
+                       expected-sql)))))
 
+           ; In the middle of repurposing the testtranslate method.... probably want 2 diferemnt methods. 1. select. 2. from...
+           (test-translate-2
+              [test-name ccl expected-sql]
+              (let [actual-sql (cts/translateAll ccl)]
+               (testing test-name
+                (is (= (cts/canonical-whitespace-and-comments expected-sql)
+                       (cts/canonical-whitespace-and-comments actual-sql))
+                  (str ccl
+                       " -> "
+                       expected-sql))
+                (let [[missing extra same]
+                      (diff
+                        (sql-fragments (cts/canonical-whitespace-and-comments expected-sql))
+                        (sql-fragments (cts/canonical-whitespace-and-comments actual-sql)))]
+                  (is (nil? missing)
+                   "Missing from actual")
+                  (is (nil? extra)
+                   "Extra in actual")))))]
 
-      (test-parse
-        "select ocir.catalog_cd from order_catalog_item_r ocir"
-        [{:type :select
-          :nodes
-          [keyword-select
-           {:type :select-list
-            :leading-whitespace " "
-            :nodes [field-definition-ocir_catalog_cd]}
-           from-order_catalog_item_r-ocir]}])
+     ;  (test-parse
+     ;    "select ocir.catalog_cd from order_catalog_item_r ocir"
+     ;    [{:type :select
+     ;      :nodes
+     ;      [keyword-select
+     ;       {:type :select-list
+     ;        :leading-whitespace " "
+     ;        :nodes [field-definition-ocir_catalog_cd]}
+     ;       from-order_catalog_item_r-ocir]}])
 
-      (test-parse
-        "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
-        [{:type :select
-          :nodes
-          [keyword-select
-           {:type :select-list
-            :leading-whitespace " "
-            :nodes [field-definition-ocir_catalog_cd
-                    {:type :field-conjunction :nodes [","]}
-                    field-definition-ocir_catalog_cd]}
-           from-order_catalog_item_r-ocir]}])
+     ;  (test-parse
+     ;    "select ocir.catalog_cd,ocir.catalog_cd from order_catalog_item_r ocir"
+     ;    [{:type :select
+     ;      :nodes
+     ;      [keyword-select
+     ;       {:type :select-list
+     ;        :leading-whitespace " "
+     ;        :nodes [field-definition-ocir_catalog_cd
+     ;                {:type :field-conjunction :nodes [","]}
+     ;                field-definition-ocir_catalog_cd]}
+     ;       from-order_catalog_item_r-ocir]}])
 
-      (test-parse
-        "select ocir.catalog_cd,ITEM_PRIMARY=ocir.catalog_cd from order_catalog_item_r ocir"
-        [{:type :select
-          :nodes
-          [keyword-select
-           {:type :select-list
-            :leading-whitespace " "
-            :nodes [field-definition-ocir_catalog_cd
-                    {:type :field-conjunction :nodes [","]}
-                    field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}
-           from-order_catalog_item_r-ocir]}])
+     ;  (test-parse
+     ;    "select ocir.catalog_cd,ITEM_PRIMARY=ocir.catalog_cd from order_catalog_item_r ocir"
+     ;    [{:type :select
+     ;      :nodes
+     ;      [keyword-select
+     ;       {:type :select-list
+     ;        :leading-whitespace " "
+     ;        :nodes [field-definition-ocir_catalog_cd
+     ;                {:type :field-conjunction :nodes [","]}
+     ;                field-definition-ocir_catalog_cd-as-ITEM_PRIMARY]}
+     ;       from-order_catalog_item_r-ocir]}])
 
-     (test-parse
-        "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
-        [{:type :select
-          :nodes
-          [keyword-select
-           {:type :select-list
-            :leading-whitespace " "
-            :nodes [field-definition-ocir_catalog_cd
-                    {:type :field-conjunction :nodes [","]}
-                    field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}
-           from-order_catalog_item_r-ocir]}])
+     ; (test-parse
+     ;    "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+     ;    [{:type :select
+     ;      :nodes
+     ;      [keyword-select
+     ;       {:type :select-list
+     ;        :leading-whitespace " "
+     ;        :nodes [field-definition-ocir_catalog_cd
+     ;                {:type :field-conjunction :nodes [","]}
+     ;                field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY]}
+     ;       from-order_catalog_item_r-ocir]}])
 
-     (testing "Testing translation"
+     ; (testing "Testing translation"
 
-      (test-translate
-        "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
-        "select ocir.catalog_cd,uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY from order_catalog_item_r ocir")
+     ;  (test-translate-1 "simple"
+     ;    "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+     ;    "select ocir.catalog_cd,uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY from order_catalog_item_r ocir")
 
-      (test-translate
-        "select /*multi-line
-          comment*/
-          ocir.catalog_cd, -- sql line comment
-          ; ccl line comment
-          ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
-        "select /*multi-line
-          comment*/
-          ocir.catalog_cd, -- sql line comment
-          ; ccl line comment
-          uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
-          from order_catalog_item_r ocir")))))
+     ;  (test-translate-1 "simple-with-comments"
+     ;    "select /*multi-line
+     ;      comment*/
+     ;      ocir.catalog_cd, -- sql line comment
+     ;      ; ccl line comment
+     ;      ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
+     ;    "select /*multi-line
+     ;      comment*/
+     ;      ocir.catalog_cd, -- sql line comment
+     ;      ; ccl line comment
+     ;      uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
+     ;      from order_catalog_item_r ocir")
+
+      (test-translate-2 "1930-detail"
+        detail-1930-ccl
+        detail-1930-sql))))
 
 
 (defcard overall-translation
   (sab/html [:code
               (string/replace
-                (cts/translate-all "
+                (cts/replace-all "
               select distinct
                 sir.item_id,
                 ocs.catalog_cd,
