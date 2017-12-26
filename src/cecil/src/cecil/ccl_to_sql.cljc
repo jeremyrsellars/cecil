@@ -9,6 +9,8 @@
 
 ;; uar_get_code_by
 
+(declare emit-string)
+
 (def uar_get_code_by-regex
   #"(?i)\buar_get_code_by\s*\(\s*\"([^\"]+)\"\s*,\s*(\d+)\s*,\s*\"([^\"]+)\"\s*\)")
 
@@ -147,22 +149,40 @@
 (s/check-asserts true)
 
 (s/def ::type keyword?)
-(s/def ::nodes (s/coll-of ::ast-node-or-token))
+(s/def ::nodes (s/coll-of ::ast-node-or-token
+                      :kind #(and (sequential? %) (not (map? %)))
+                      :into []))
 (s/def ::token string?)
+(s/def ::tokens (s/coll-of ::token :into []))
+(s/def ::leading-whitespace (s/nilable string?))
 (s/def ::ast-node (s/keys :req-un [::type ::nodes]
-                          :opt-un [::expression]))
+                          :opt-un [::expression ::leading-whitespace]))
 (s/def ::ast-node-or-token (s/or :node ::ast-node :token ::token))
 (s/def ::expression ::ast-node)
-(s/def ::ast-nodes (s/coll-of ::ast-node))
+(s/def ::ast-nodes (s/coll-of ::ast-node
+                      :kind #(and (sequential? %) (not (map? %)))
+                      :into []))
+;; parsing return types
+(s/def ::ast-node-and-tokens (s/cat :return ::ast-node :tokens ::tokens))
+(s/def ::ast-nodes-and-tokens (s/cat :return ::ast-nodes :tokens ::tokens))
 
-
-(defn ast-node
+(defn assert-ast-node
   [x]
+  ; (pprint/pprint (s/explain-data ::ast-node x))
   (s/assert ::ast-node x))
 
-(defn ast-nodes
+(defn assert-ast-nodes
   [x]
+  ; (pprint/pprint (s/explain-data ::ast-nodes x))
   (s/assert ::ast-nodes x))
+
+(defn assert-ast-node-and-tokens
+  [x]
+  (s/assert ::ast-node-and-tokens x))
+
+(defn assert-ast-nodes-and-tokens
+  [x]
+  (s/assert ::ast-nodes-and-tokens x))
 
 
 
@@ -374,7 +394,7 @@
         (or (token-of-type? nt :terminal)
             (some #(% nt) terminal-fns))
         [{:type :expression
-          :nodes (ast-nodes parts)}
+          :nodes (assert-ast-nodes parts)}
          tokens] ; don't eat terminal
 
         ; non-terminal
@@ -384,32 +404,33 @@
                 (parse-parenthetical tokens)
                 (parse-identifier tokens))]
           (recur
-            (conj parts (ast-node expr))
+            (conj parts (assert-ast-node expr))
             remaining))))))
 
 (defn parse-field-definition
  ([tokens]
   (let [[expression rst] (parse-expression tokens #(token-of-type? % :equals :comma)
                                                   #(-> % :keyword (= :from)))]
-
+   (assert-ast-node-and-tokens
     (parse-field-definition
       [{:type :field-definition
-        :nodes [(ast-node expression)]
+        :nodes [(assert-ast-node expression)]
         :expression expression}]
-      rst)))
+      rst))))
 
  ([field-definitions tokens]
   (let [[nt remaining] (next-token tokens)]
+   (assert-ast-node-and-tokens
       (if (token-of-type? nt :equals)
         (let [[part2 remaining2] (parse-field-definition remaining)
               ;[part2 remaining3] (parse-field-definition remaining2)
               {:keys [nodes], alias :expression} (first field-definitions)]
           [{:type :field-definition
-            :nodes (ast-nodes (into (conj nodes nt) (get part2 :nodes)))
+            :nodes (assert-ast-nodes (into (conj nodes nt) (get part2 :nodes)))
             :alias alias
             :expression (get part2 :expression)}
            remaining2])
-        [(first (ast-nodes field-definitions)) tokens]))))
+        [(first (assert-ast-nodes field-definitions)) tokens])))))
 
 (defn parse-select-list
  ([tokens] ; parse the first field definition, then recurse
@@ -417,6 +438,7 @@
     (parse-select-list [fd] remaining)))
  ([field-definitions tokens]
   (let [[nt remaining] (next-token tokens)]
+    (assert-ast-nodes-and-tokens
       (if (token-of-type? nt :comma)
         (let [[fd remaining2] (parse-field-definition remaining)]
           (parse-select-list
@@ -424,9 +446,158 @@
               (assoc nt :type :field-conjunction)
               fd)
             remaining2))
-        [field-definitions tokens]))))
+        [field-definitions tokens])))))
+
+(defn table-aliases-map
+  "Yields a map of alias to table {alias table} from the CCL FROM clause"
+  [ast-nodes]
+  (let [is-separator? (fn is-separator? [{:keys [type]}] (= type :comma))
+        pairs (remove
+                #(every? is-separator? %)
+                (partition-by is-separator? ast-nodes))]
+    (reduce
+      (fn [m [table alias]]
+        (assoc m (-> alias :nodes first) (assoc table :leading-whitespace " ")))
+      {}
+      pairs)))
+
+(defn plan-sections
+  [nodes]
+  (loop [sections []
+         nodes nodes]
+    (if (empty? nodes)
+      sections
+      (let [[{:keys [type keyword] :as n} & rst]  nodes]
+        (if
+          (and (= type :keyword)
+               (or (= keyword :plan)
+                   (= keyword :join)))
+          (recur (conj sections [n])
+                 rst)
+          (recur (update sections (dec (count sections)) conj n)
+                 rst))))))
+
+(defn join-type
+  [filter-expressions]
+  (println ::to-do 'join-type "constantly interprets expressions as inner join:" #_filter-expressions)
+  "inner join")
+
+(defn interpret-plan
+  [section-nodes table-aliases]
+  (let [[{:keys [keyword] :as kw} alias-kw & raw-filter-expressions] section-nodes
+
+        alias (-> alias-kw :nodes first)
+
+        [expr-type filter-kw]
+        (case keyword
+          :plan [:from :where]
+          :join [:join :on]
+                [:unknown :unknown])
+
+        filter-expressions
+        (map
+          (fn [{:keys [type keyword] :as ast-node}]
+            (cond-> ast-node
+              (and (= type :keyword) (= :where keyword))
+              (assoc :nodes [(name filter-kw)])))
+          raw-filter-expressions)
+
+        table-def (get table-aliases alias alias-kw)
+        ; _ (println :table-aliases table-aliases)
+        ; _ (println :td alias '-> table-def)
+        replacement-keyword
+          (case keyword
+            :plan "from"
+            :join (join-type filter-expressions)
+                  [:unknown :where])
+        clause-start-nodes
+          [(assoc kw :nodes [replacement-keyword])
+           (assoc table-def :leading-whitespace " ")
+           alias-kw]]
+   (assert-ast-node
+    {:type expr-type
+     :nodes (case expr-type
+              :from clause-start-nodes
+              :join (into clause-start-nodes filter-expressions))
+     :filter-expressions filter-expressions})))
+
+(defn reinterpret-plans
+  [nodes table-aliases]
+  ; (println :nodes nodes)
+  ; (println :plan-sections)
+  ; (pprint/pprint (plan-sections nodes))
+  (if-not (seq nodes)
+    []
+    (let [[from & joins] (map interpret-plan (plan-sections nodes) (repeat table-aliases))
+          where (assoc from
+                  :type :where
+                  :nodes (get from :filter-expressions))
+           ; _ (println :where where)
+           ; _ (pprint/pprint from)
+           ; _ (println :joins)
+           ; _ (pprint/pprint joins)
+           ;_ (println :fe (get from :filter-expressions))
+           join-expressions
+             (-> []
+                 (conj (assert-ast-node (dissoc from :filter-expressions)))
+                 (into (assert-ast-nodes (map #(dissoc % :filter-expressions) joins)))
+                 (conj (assert-ast-node (dissoc where :filter-expressions))))]
 
 
+      ; (pprint/pprint (->> ;(map update join-expressions (repeat :nodes) (repeat count))
+      ;                     join-expressions
+      ;                     (map #(dissoc % :filter-expressions))
+      ;                     (vector :join-expressions)))
+      ; (pprint/pprint (last join-expressions))
+      (assert-ast-nodes join-expressions))))
+      ;join-expressions)))
+
+(defn reinterpret-from
+  [{:keys [nodes] :as expression}]
+  (let [is-from? (fn is-from? [{:keys [type keyword]}] (and (= type :keyword) (= keyword :from)))
+        terminates-joins? (fn terminates-joins?
+                            [{:keys [type keyword]}]
+                            ;(println ::tj? type keyword)
+                            (contains? #{:group-by :order-by :terminal} type))
+        terminates-from? (fn terminates-from?
+                            [{:keys [type keyword] :as ast-node}]
+                            (or (and (= type :keyword)
+                                     (= :plan keyword))
+                                (terminates-joins? ast-node)))
+        ast-nodes nodes
+        [before-from from-etc] (split-with (complement is-from?) ast-nodes)
+        ;_ (println :before-from before-from)
+        [from aliases-etc] (split-with is-from? from-etc)
+        ;_ (println :from from)
+        [aliases after-from] (split-with (complement terminates-from?) aliases-etc)
+        table-aliases (table-aliases-map aliases-etc)
+        ; _ (println :table-aliases table-aliases)
+        [joins after-joins] (split-with (complement terminates-joins?) after-from)
+        ; _ (println :after-from after-from)
+        ; _ (pprint/pprint [:after-joins after-joins])
+        ; _ (pprint/pprint [:joins joins])
+        join-expressions (reinterpret-plans joins table-aliases)
+        ;_ (println :join-expressions join-expressions)
+
+        ;_ (println :join-expressions join-expressions)
+        nodes
+        (-> []
+            (into before-from)
+            ;(into from)
+            (into join-expressions)
+            (into after-joins))]
+   (assert-ast-node
+    (assoc expression :nodes nodes))))
+
+(defn maybe-reinterpret-from
+  [{:keys [nodes] :as expression}]
+  (if (some
+       (fn [{:keys [type keyword]}]
+          (and (= type :keyword)
+               (= keyword :plan)))
+       nodes)
+    (reinterpret-from expression)
+    expression))
 
 (defn parse-select
   [tokens]
@@ -434,28 +605,36 @@
         [ws tokens] (next-whitespaces-and-comments-as-string tokens)
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
+        ; _ (println :select-list-parsed select-list-parsed)
+        ;_ (println :ne (map :type (:nodes next-expression)))
+        from (maybe-reinterpret-from next-expression)
+        ;_ (println :from from)
         select-list
         {:type :select-list
          :leading-whitespace ws
-         :nodes select-list-parsed}]
+         :nodes (assert-ast-nodes select-list-parsed)}]
+     ; (pprint/pprint :from)
+     ; (pprint/pprint from)
+     ; (println ::parse-select (emit-string from))
+   (assert-ast-node-and-tokens
      [{:type :select
        :nodes [kw
                select-list
-               next-expression]}
-      remaining]))
+               (assert-ast-node from)]}
+      remaining])))
 
 (defn tokenize-and-parse
   [ccl]
-  (let [tokens (util/tokenize ccl)
-        [select-ast remaining] (parse-select tokens)]
-    [[select-ast]
-     remaining]))
+  (let [tokens (util/tokenize ccl)]
+   (assert-ast-node-and-tokens
+    (parse-select tokens))))
 
 (letfn [(emit-leading-whitespace-and-tokens [x]
           (cond (map? x)          [(:leading-whitespace x) (:nodes x)]
                 (string? x)       x
-                (vector? x)       x
-                (seq? x)          x))]
+                (sequential? x)   x
+                (nil? x)          nil
+                :default          (println :elwat x)))]
   (defn emit-tokens
     [ast-nodes]
     (->> ast-nodes
@@ -465,7 +644,9 @@
 
   (defn emit-string
     [ast-nodes]
+    ;(println ::emit-string ast-nodes)
     (->> ast-nodes
+         ; assert-ast-nodes
          emit-tokens
          (string/join ""))))
 
@@ -474,75 +655,89 @@
           :nodes ["AS"]}]
  (letfn [(alias-rearranger
            [{:keys [expression alias] :as n}]
+           ;(println :alias-rearranger n)
            (let [pre-ws1 (get-in alias      [:nodes 0 :leading-whitespace])
                  pre-ws2 (get-in expression [:nodes 0 :leading-whitespace])
-                 pre-ws (or pre-ws1 pre-ws2)]
-              (cond-> [(assoc-in expression [:nodes 0 :leading-whitespace] pre-ws)]
-                alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))))
+                 pre-ws (or pre-ws1 pre-ws2)
+                 rearranged
+                  (cond-> [(assoc-in expression [:nodes 0 :leading-whitespace] pre-ws)]
+                    alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))]
+            ;(println :alias-rearranged rearranged)
+            (assoc n
+              :nodes (assert-ast-nodes rearranged))))
 
          (change-alias
-          [{:keys [type] :as ast-node}]
-          (if (= type :field-definition)
-            (alias-rearranger ast-node)
-            ast-node))]
+          [x]
+          (if (and (map? x)
+                   (= :field-definition (get x :type)))
+            (assert-ast-node
+              (alias-rearranger x))
+            x))]
+
 
   (defn translate-field-aliases
-    [ast-nodes]
-    (->> ast-nodes
-         (walk/prewalk change-alias)
-         flatten
-         (filter some?))))
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk change-alias)))))
+         ; (walk/prewalk identity)))))
+         ;(walk/prewalk identity))))
 
- (letfn [(is-parenthetical-expression?
-            [ast-node]
-            (if (associative? ast-node)
-              (let [{:keys [type sub-type nodes]} ast-node]
-                (boolean
-                  (and (= sub-type :parenthetical)
-                       (= type :expression))))
-              false))
+ ; (letfn [(is-parenthetical-expression?
+ ;            [ast-node]
+ ;            (if (associative? ast-node)
+ ;              (let [{:keys [type sub-type nodes]} ast-node]
+ ;                (boolean
+ ;                  (and (= sub-type :parenthetical)
+ ;                       (= type :expression))))
+ ;              false))
 
-         (simplify-parenthetical
-           [{:keys [type sub-type nodes] :as outer}]
-           (let [inner (first nodes)
-                 pre-ws-outer (get outer :leading-whitespace)
-                 pre-ws-inner (get inner :leading-whitespace)
-                 pre-ws (str pre-ws-outer pre-ws-inner)]
-              (assoc inner :leading-whitespace pre-ws)))
+ ;         (simplify-parenthetical
+ ;           [{:keys [type sub-type nodes] :as outer}]
+ ;           (let [inner (first nodes)
+ ;                 pre-ws-outer (get outer :leading-whitespace)
+ ;                 pre-ws-inner (get inner :leading-whitespace)
+ ;                 pre-ws (or pre-ws-outer pre-ws-inner)]
+ ;              (assoc inner :leading-whitespace pre-ws)))
 
-         (simplify-parenthetical-expression
-          [{:keys [type sub-type nodes] :as ast-node}]
-          (let [non-paren-nodes (remove #(token-of-type? % :lparen :rparen) nodes)]
-            (cond
-              (or (not (is-parenthetical-expression? ast-node))
-                  (not= 1 (count non-paren-nodes))
-                  (not (is-parenthetical-expression? (first non-paren-nodes))))
-              ast-node
+ ;         (simplify-parenthetical-expression
+ ;          [{:keys [type sub-type nodes] :as ast-node}]
+ ;          (let [non-paren-nodes (remove #(token-of-type? % :lparen :rparen) nodes)]
+ ;            (cond
+ ;              (or (not (is-parenthetical-expression? ast-node))
+ ;                  (not= 1 (count non-paren-nodes))
+ ;                  (not (is-parenthetical-expression? (first non-paren-nodes))))
+ ;              ast-node
 
-              :else
-              (simplify-parenthetical ast-node))))]
+ ;              :else
+ ;              (simplify-parenthetical ast-node))))]
 
-  (defn simplify-parenthetical-expressions
-    [ast-nodes]
-    (->> ast-nodes
-         (walk/prewalk simplify-parenthetical-expression)
-         flatten
-         (filter some?)))))
+ ;  (defn simplify-parenthetical-expressions
+ ;    [ast-nodes]
+ ;    (->> ast-nodes
+ ;         (walk/prewalk simplify-parenthetical-expression)
+ ;         flatten
+ ;         (filter some?)))))
 
 
-(defn simplify-sql
-  [sql]
-  (let [[ast remaining] (tokenize-and-parse sql)
-        simplified         (->> ast
-                                simplify-parenthetical-expressions)
-        simplified-sql     (emit-string [simplified remaining])]
-    (replace-all simplified-sql)))
+; (defn simplify-sql
+;   [sql]
+;   (let [[ast remaining] (tokenize-and-parse sql)
+;         simplified         (->> ast
+;                                 simplify-parenthetical-expressions)
+;         simplified-sql     (emit-string [simplified remaining])]
+;     (replace-all simplified-sql)))
 
 
 (defn ccl->sql-and-report
   [ccl]
-  (let [[ast remaining] (tokenize-and-parse  (replace-all ccl))
-        translated-ast  (translate-field-aliases ast)
+  (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
+        translated-ast  (-> ast
+                            assert-ast-node
+                            translate-field-aliases
+                            assert-ast-node
+                            identity)
+        ; _ (pprint/pprint [:translated-ast translated-ast])
+        ;translated-sql  (emit-string [ast remaining])
         translated-sql  (emit-string [translated-ast remaining])
         ; simplified-sql  (simplify-sql translated-sql)
         sql translated-sql]
