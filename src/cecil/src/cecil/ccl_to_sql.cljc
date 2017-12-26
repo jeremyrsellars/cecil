@@ -192,7 +192,8 @@
     (get unomynous-token->type s)
     (cond
       (re-find #"(?i)group(?:\s+by)?" s) :group-by
-      (re-find #"(?i)order\s+by" s) :order-by)))
+      (re-find #"(?i)order\s+by" s)      :order-by
+      (re-find #"^\d" s)                 :number)))
 
 
 (defn string->token
