@@ -1,0 +1,16 @@
+select distinct
+  sir.item_id,
+  ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd)
+from
+  order_catalog_item_r ocir,
+  synonym_item_r sir
+plan sir
+where sir.item_id not in (
+  select
+    1
+  from
+    dual
+)
+join ocir
+  where ocir.item_id = sir.item_id
+order by sir.item_id
