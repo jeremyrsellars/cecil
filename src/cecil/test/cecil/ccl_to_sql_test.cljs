@@ -318,13 +318,14 @@
                   (is (nil? missing)
                    "Missing from actual")
                   (is (nil? extra)
-                   "Extra in actual")))))]
+                   "Extra in actual")
                   ; (is (nil? same)
                   ;  "Show same")
                   ; (is (nil? (string/split actual-sql #"\r?\n"))
                   ;  "Show actual-sql")
-                  ; (is (nil? (cts/translate-field-aliases (first (cts/tokenize-and-parse (cts/replace-all ccl)))))
-                  ;  "Show actual AST")))))]
+                  (when-not (and (nil? missing) (nil? extra))
+                     (is (nil? (cts/translate-field-aliases (first (cts/tokenize-and-parse (cts/replace-all ccl)))))
+                        "Show actual AST"))))))]
 
       (test-parse
         "select ocir.catalog_cd from order_catalog_item_r ocir"

@@ -213,6 +213,8 @@
     (cond
       (re-find #"(?i)group(?:\s+by)?" s) :group-by
       (re-find #"(?i)order\s+by" s)      :order-by
+      (re-find #"^'" s)                  :string-single
+      (re-find #"^\"" s)                 :string-double
       (re-find #"^\d" s)                 :number)))
 
 
@@ -679,8 +681,43 @@
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk change-alias)))))
-         ; (walk/prewalk identity)))))
-         ;(walk/prewalk identity))))
+
+(defn ccl-string-value
+  [^String ccl-string]
+  (println :ccl-string-value ccl-string)
+  (when (some? ccl-string)
+    ; to-do: de-escape the string... I don't know how/if ccl strings are escaped in literals
+    (subs ccl-string 1 (dec (count ccl-string)))))
+
+
+(defn escape-and-quote-sql-string
+  [raw-string]
+  (str
+   "'"
+   (string/replace raw-string "'" "''")
+   "'"))
+
+(defn ccl-string->sql-string
+  [ccl-string]
+  (-> ccl-string
+      ccl-string-value
+      escape-and-quote-sql-string))
+
+(let []
+ (letfn [(change-strings-from-ccl-to-sql
+          [x]
+          (if (and (map? x)
+                   (= :string-double (get x :type)))
+            (-> x
+                (update-in [:nodes 0] ccl-string->sql-string)
+                (assoc :type :string-single))
+            x))]
+
+
+  (defn translate-strings
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk change-strings-from-ccl-to-sql)))))
 
  ; (letfn [(is-parenthetical-expression?
  ;            [ast-node]
@@ -734,6 +771,7 @@
         translated-ast  (-> ast
                             assert-ast-node
                             translate-field-aliases
+                            translate-strings
                             assert-ast-node
                             identity)
         ; _ (pprint/pprint [:translated-ast translated-ast])
