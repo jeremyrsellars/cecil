@@ -1,0 +1,41 @@
+; http://editorconfig.org/
+
+; Top-most EditorConfig file
+root = true
+
+[*]
+charset = utf-8
+
+[*.{bat,cmd,cs,css,fs,fsx,js,json,ps1,tex,ts,xaml}]
+indent_style = space
+indent_size = 4
+end_of_line = CRLF
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{config,csproj,fsproj,rdl,sln,sql,svc,svg,vssettings,xml,xsd,xslt,wixproj,wxi,wxs}]
+indent_style = space
+indent_size = 2
+end_of_line = CRLF
+
+[*.{aspx,html,htm}]
+indent_style = space
+indent_size = 4
+end_of_line = CRLF
+
+[*.{clj,cljr,cljs,cljx,cljc}]
+indent_style = space
+indent_size = 2
+end_of_line = LF
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{bas,cls,cpp,ctl,frm,h}]
+indent_style = space
+indent_size = 3
+end_of_line = CRLF
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
