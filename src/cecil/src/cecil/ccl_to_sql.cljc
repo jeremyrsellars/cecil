@@ -191,12 +191,13 @@
    :from
    :and
    :or
+   :in
+   :count
    :where
    :plan
    :join
    ;:order :group :by  ; somehwere else because of whitespace
    :having})
-
 
 (def unomynous-token->type
   {"." :dot
@@ -217,6 +218,9 @@
       (re-find #"^\"" s)                 :string-double
       (re-find #"^\d" s)                 :number)))
 
+(defn canonical-keyword
+  [s]
+  (keyword (string/lower-case s)))
 
 (defn string->token
   [s]
@@ -226,12 +230,13 @@
     (assoc
       (if-let [tt (token->type s)]
         {:type tt}
-        (if-let [canonical-keyword (ccl-keywords (keyword s))]
-          {:type :keyword
-           :keyword canonical-keyword}
-          {:type (cond
-                    (string/blank? s)         :whitespace
-                    :else                     :identifier)}))
+        (let [kw (canonical-keyword s)]
+          (if-let [ck (ccl-keywords kw)]
+            {:type :keyword
+             :keyword ck}
+            {:type (cond
+                      (string/blank? s)         :whitespace
+                      :else                     :identifier)})))
       :nodes [s])))    ; consider interning here
 
 
@@ -381,6 +386,14 @@
           (let [[expr remaining] (parse-expression tokens #(token-of-type? % :rparen :comma))]
               (recur (conj parts expr) remaining)))))))
 
+(defn is-parenthetical-expression?
+  [ast-node]
+  (boolean
+    (when (associative? ast-node)
+      (let [{:keys [type sub-type nodes]} ast-node]
+          (and (= sub-type :parenthetical)
+               (= type :expression))))))
+
 (defn parse-expression
   [tokens & terminal-fns]
   (loop [parts []
@@ -402,8 +415,22 @@
         ; non-terminal
         :else
         (let [[expr remaining]
-              (if (token-of-type? nt :lparen)
+              (cond
+                ; parenthetical?
+                (token-of-type? nt :lparen)
                 (parse-parenthetical tokens)
+
+                ; function-invocation
+                (and (token-of-type? nt :identifier)
+                     (let [[nt _] (next-token remaining)]
+                        (token-of-type? nt :lparen)))
+                (let [[parenthetical remaining] (parse-parenthetical remaining)]
+                  [{:type :function-invocation
+                    :function (canonical-keyword (first (get nt :nodes)))
+                    :nodes [nt parenthetical]}
+                   remaining])
+
+                :else
                 (parse-identifier tokens))]
           (recur
             (conj parts (assert-ast-node expr))
@@ -481,8 +508,14 @@
 
 (defn join-type
   [filter-expressions]
-  (println ::to-do 'join-type "constantly interprets expressions as inner join:" #_filter-expressions)
-  "inner join")
+  (if-let [outer-join (->> filter-expressions
+                           (filter map?)
+                           (filter (fn [{:keys [type function]}]
+                                      (and (= type :function-invocation)
+                                           (= function :outerjoin))))
+                           seq)]
+    "left join"
+    "inner join"))
 
 (defn interpret-plan
   [section-nodes table-aliases]
@@ -703,7 +736,7 @@
       ccl-string-value
       escape-and-quote-sql-string))
 
-(let []
+(let [why? "because letfn can collide - https://dev.clojure.org/jira/browse/CLJS-1965"]
  (letfn [(change-strings-from-ccl-to-sql
           [x]
           (if (and (map? x)
@@ -719,16 +752,52 @@
     (->> ast-node-or-nodes
          (walk/prewalk change-strings-from-ccl-to-sql)))))
 
- ; (letfn [(is-parenthetical-expression?
- ;            [ast-node]
- ;            (if (associative? ast-node)
- ;              (let [{:keys [type sub-type nodes]} ast-node]
- ;                (boolean
- ;                  (and (= sub-type :parenthetical)
- ;                       (= type :expression))))
- ;              false))
+(defn unwrap-function-invocation
+  "Gets the function argument (single argument expression, or arguments as parenthetical-expression)"
+  [{:keys [nodes] :as function-invocation-expression}]
+  (let [leading-whitespace (get-in nodes [0 :leading-whitespace])
+        {parenthetical-nodes :nodes :as parenthetical}
+        (first (filter is-parenthetical-expression? nodes))]
+    (pprint/pprint [:unwrap-function-invocation parenthetical-nodes])
+    (update
+      (if (= 3 (count parenthetical-nodes)) ; 3 <- "(" expr ")"
+        (nth parenthetical-nodes 1)
+        parenthetical)
+      :leading-whitespace (partial str leading-whitespace))))
 
- ;         (simplify-parenthetical
+(defmulti translate-function-invocation
+  (fn [expression]
+    (get expression :function)))
+
+(defmethod translate-function-invocation :default
+  [expression]
+  ; no change
+  (println "WARNING: Unsupported function invocation: " (get expression :function))
+  expression)
+
+(defmethod translate-function-invocation :value
+  [expression]
+  (unwrap-function-invocation expression))
+
+(defmethod translate-function-invocation :outerjoin
+  [expression]
+  (unwrap-function-invocation expression))
+
+(let [why? "because letfn can collide - https://dev.clojure.org/jira/browse/CLJS-1965"]
+ (letfn [(interpret-function-invocations
+          [x]
+          (if (and (map? x)
+                   (= :function-invocation (get x :type)))
+            (translate-function-invocation x)
+            x))]
+
+
+  (defn translate-function-invocations
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk interpret-function-invocations)))))
+
+ ; (letfn [(simplify-parenthetical
  ;           [{:keys [type sub-type nodes] :as outer}]
  ;           (let [inner (first nodes)
  ;                 pre-ws-outer (get outer :leading-whitespace)
@@ -772,6 +841,7 @@
                             assert-ast-node
                             translate-field-aliases
                             translate-strings
+                            translate-function-invocations
                             assert-ast-node
                             identity)
         ; _ (pprint/pprint [:translated-ast translated-ast])

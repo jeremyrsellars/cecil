@@ -15,10 +15,10 @@
     on ocs.synonym_id = sir.synonym_id
     and ocs.cat_id != ocir.cat_id
   left join med_identifier mi
-    on mi.item_id = outerjoin(ocir.item_id)
-    and mi.med_product_id = outerjoin(0)
-    and mi.primary_ind = outerjoin(1)
-    and mi.med_identifier_type_id = outerjoin(value((select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!3290' and ACTIVE_IND = 1 )))
+    on mi.item_id = ocir.item_id
+    and mi.med_product_id = 0
+    and mi.primary_ind = 1
+    and mi.med_identifier_type_id = (select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!3290' and ACTIVE_IND = 1 )
   where sir.item_id not in (
     select
       ocir.item_id

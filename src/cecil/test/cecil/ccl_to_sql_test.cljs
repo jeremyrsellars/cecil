@@ -18,8 +18,11 @@
 (deftest cki-contents
   (is (not (empty? cki/cki))))
 
-(def example-1-ccl (insert-file-contents-string "resources/example-1/detail.ccl"))
-(def example-1-sql (insert-file-contents-string "resources/example-1/detail.sql"))
+(def example-innerjoin-ccl (insert-file-contents-string "resources/example-innerjoin/detail.ccl"))
+(def example-innerjoin-sql (insert-file-contents-string "resources/example-innerjoin/detail.sql"))
+
+(def example-leftjoin-ccl (insert-file-contents-string "resources/example-leftjoin/detail.ccl"))
+(def example-leftjoin-sql (insert-file-contents-string "resources/example-leftjoin/detail.sql"))
 
 (def example-field-alias-ccl (insert-file-contents-string "resources/example-field-alias/detail.ccl"))
 (def example-field-alias-sql (insert-file-contents-string "resources/example-field-alias/detail.sql"))
@@ -238,10 +241,12 @@
         :nodes ["uar_get_code_display"]}
 
       expression-fn-call-ocir_catalog_cd
-       {:type :expression
-        :nodes [identifier-UAR_GETCODE_DISPLAY
-                {:type :expression :sub-type :parenthetical
-                 :nodes [symbol-lparen expression-ocir_catalog_cd symbol-rparen]}]}
+        {:type :expression,
+         :nodes [{:type :function-invocation,
+                  :function :uar_get_code_display,
+                  :nodes [identifier-UAR_GETCODE_DISPLAY
+                          {:type :expression :sub-type :parenthetical
+                           :nodes [symbol-lparen expression-ocir_catalog_cd symbol-rparen]}]}]}
 
       field-definition-UAR_GETCODE_DISPLAY-ocir_catalog_cd_-as-ITEM_PRIMARY
        {:type :field-definition
@@ -408,9 +413,13 @@
         example-like-ccl
         example-like-sql)
 
-      (test-translate-2 "example-1"
-        example-1-ccl
-        example-1-sql)
+      (test-translate-2 "example-leftjoin"
+        example-leftjoin-ccl
+        example-leftjoin-sql)
+
+      (test-translate-2 "example-innerjoin"
+        example-innerjoin-ccl
+        example-innerjoin-sql)
 
       (test-translate-2 "1930-detail"
         detail-1930-ccl
