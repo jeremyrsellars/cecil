@@ -29,7 +29,9 @@
         <button onclick="semiAutomate();" accesskey="t"><U>T</U>ranslate</button>
     </div>
     <div class='tile'>
-        <h3>CCL</h3>
+        <a id='ccl' href="#ccl">
+            <h3>CCL</h3>
+        </a>
         <div id='ccl-cm-container'></div>
         <textarea id='cclArea' rows=40 cols=100>
   select distinct
@@ -54,7 +56,7 @@
       order_catalog_item_r ocir
     group by ocir.item_id
     having count(ocir.catalog_cd) > 1
-  )
+  ) and "abcdef" like "abc*"
   join ocir
     where ocir.item_id = sir.item_id
   join ocs
@@ -69,7 +71,10 @@
         </textarea>
     </div>
     <div class='tile'>
-        <h3>PL/SQL</h3>
+        <a id='sql' href="#sql">
+            <h3>PL/SQL</h3>
+        </a>
+
         <div id='sql-cm-container' class='calculated'></div>
     </div>
     <div>
@@ -111,6 +116,11 @@
             cclArea.outerHTML = "";
             semiAutomate();
         }, 1000)
+
+        // ;global called by cljs (for figwheel reloading)
+        function onReload(){
+            semiAutomate()
+        }
     </script>
   </body>
 </html>
