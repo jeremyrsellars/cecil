@@ -56,7 +56,7 @@
       order_catalog_item_r ocir
     group by ocir.item_id
     having count(ocir.catalog_cd) > 1
-  ) and "abcdef" like "abc*"
+  ) and "abcdef" = "abc*"
   join ocir
     where ocir.item_id = sir.item_id
   join ocs
