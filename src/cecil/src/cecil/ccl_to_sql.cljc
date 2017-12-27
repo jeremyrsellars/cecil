@@ -719,7 +719,7 @@
 
 
   (defn translate-strings
-    "Changes from `\"a\"` to `a`."
+    "Changes from `\"a\"` to `'a'`."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk change-strings-from-ccl-to-sql)))))
@@ -857,8 +857,10 @@
   #?(:clj
       (map str translations)
      :cljs
-     (-> []
-         (into (map #(string/replace (.-name %) #".+\$" "") translations))
+     (-> ["Change strings like `x = \"abc*\"` to  `x like 'abc%'`."
+          "Changes field aliases from `ALIAS=x.field` to `x.field AS ALIAS`."
+          "Changes from `\"a\"` to `'a'`."]
+         ;(into (map #(string/replace (.-name %) #".+\$" "") translations))
          (into (map #(str "CCL Function: " (name %)) (keys (dissoc (methods translate-function-invocation) :default)))))))
 
 (defn ccl->sql-and-report
