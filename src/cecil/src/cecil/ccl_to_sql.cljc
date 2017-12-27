@@ -188,6 +188,7 @@
 
 (def ccl-keywords
  #{:select
+   :distinct
    :from
    :and
    :or
@@ -611,6 +612,10 @@
   [tokens]
   (let [[kw tokens] (next-token tokens)
         [ws tokens] (next-whitespaces-and-comments-as-string tokens)
+        [distinct tokens] (let [[{:keys [type keyword] :as d} toks] (next-token tokens)]
+                            (if (and (= :keyword type) (= keyword :distinct))
+                              [(assoc d :leading-whitespace " ") toks]
+                              [nil tokens]))
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
         from (maybe-reinterpret-from next-expression)
@@ -620,9 +625,12 @@
          :nodes (assert-ast-nodes select-list-parsed)}]
    (assert-ast-node-and-tokens
      [{:type :select
-       :nodes [kw
-               select-list
-               (assert-ast-node from)]}
+       :nodes (into []
+                (filter some?
+                 [kw
+                  distinct
+                  select-list
+                  (assert-ast-node from)]))}
       remaining])))
 
 (defn tokenize-and-parse

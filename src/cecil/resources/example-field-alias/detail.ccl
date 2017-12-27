@@ -1,4 +1,4 @@
-select
+select distinct
   SID = sir.item_id
 from
   synonym_item_r sir
