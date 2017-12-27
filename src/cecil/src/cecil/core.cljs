@@ -14,7 +14,7 @@
 (defn app
   []
   [:div
-   [:h3 "CiCiL performs pattern-based transformations from CCL to Oracle SQL."]
+   [:h3 "CeCiL performs pattern-based transformations from CCL to Oracle SQL."]
    [:h4 "Supported CCL Functions."]
    [:ol {:key "shallow"}
     (map #(vector :li (string/upper-case %))
