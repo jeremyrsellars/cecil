@@ -397,6 +397,34 @@
           uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
           from order_catalog_item_r ocir")
 
+      (test-translate-2 "Simplify zero.  0.0 -> 0"
+        "select
+          0.0   as zero00,
+          00.0  as zero10,
+          0.00  as zero02,
+          00.00 as zero030
+         from order_catalog_item_r ocir"
+        "select
+          0 as zero00,
+          0 as zero10,
+          0 as zero02,
+          0 as zero030
+         from order_catalog_item_r ocir")
+
+      (test-translate-2 "Simplify plus 0.  `x + 0` -> `x`"
+        "select
+          ocir.x + 0  as zero00,
+          ocir.x + 00.0  as zero10,
+          ocir.x + 0.00  as zero02,
+          ocir.x+00.00 as zero030
+         from order_catalog_item_r ocir"
+        "select
+          ocir.x as zero00,
+          ocir.x as zero10,
+          ocir.x as zero02,
+          ocir.x as zero030
+         from order_catalog_item_r ocir")
+
       (test-translate-2 "example-field-alias"
         example-field-alias-ccl
         example-field-alias-sql)

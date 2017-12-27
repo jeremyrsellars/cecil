@@ -92,6 +92,23 @@
     (fn [[s]]
       (translate-1-cnvtupper s))))
 
+(def zero-regex
+  #"(^|\D)0+(?:\.0+)(?=$|\D)")
+
+(defn translate-zeros
+  [ccl]
+  (string/replace ccl zero-regex
+    (fn [[_ before]]
+      (str before "0"))))
+
+(def plus-zero-regex
+  #"\s*\+\s*0(?!\d|\.)")
+
+(defn translate-plus-zeros
+  [ccl]
+  (string/replace ccl plus-zero-regex
+    (constantly "")))
+
 
 
 (def regexes
@@ -99,15 +116,20 @@
   uar_get_code_display-regex
   cnvtstring-regex
   cnvtreal-regex
-  cnvtupper-regex])
+  cnvtupper-regex
+  zero-regex
+  plus-zero-regex])
 
 (def replace-all
  (let [fns
+         ; functions in reverse application order
          [translate-uar_get_code_by
           translate-uar_get_code_display
           translate-cnvtstring
           translate-cnvtreal
-          translate-cnvtupper]]
+          translate-cnvtupper
+          translate-plus-zeros
+          translate-zeros]]
   (apply comp fns)))
 
 
@@ -667,7 +689,10 @@
                  pre-ws2 (get-in expression [:nodes 0 :leading-whitespace])
                  pre-ws (or pre-ws1 pre-ws2)
                  rearranged
-                  (cond-> [(assoc-in expression [:nodes 0 :leading-whitespace] pre-ws)]
+                  (cond-> []
+                    (some some? (get expression :nodes))
+                    (conj (assoc-in expression [:nodes 0 :leading-whitespace] pre-ws))
+
                     alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))]
             (assoc n
               :nodes (assert-ast-nodes rearranged))))
