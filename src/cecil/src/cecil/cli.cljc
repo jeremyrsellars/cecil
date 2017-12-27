@@ -2,6 +2,9 @@
   (:require [clojure.string :as string]
             [cecil.ccl-to-sql :as cts]))
 
+#?(:cljs (defn slurp [file-name] "cannot slurp in cljs"))
+#?(:cljs (defn spit [file-name contents] "cannot spit in cljs"))
+
 (defn convert-file!
   [ccl-file sql-file]
   (let [ccl (slurp ccl-file)
