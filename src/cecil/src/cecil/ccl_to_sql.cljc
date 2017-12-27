@@ -674,6 +674,7 @@
 
 
   (defn translate-field-aliases
+    "Changes field aliases from `ALIAS=x.field` to `x.field AS ALIAS`."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk change-alias)))))
@@ -710,6 +711,7 @@
 
 
   (defn translate-strings
+    "Changes from `\"a\"` to `a`."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk change-strings-from-ccl-to-sql)))))
@@ -786,6 +788,7 @@
             x))]
 
   (defn translate-equals-to-like
+    "Change strings like `x = \"abc*\"` to  `x like 'abc%'`."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk translate-like-in-filter-expressions)))))
@@ -830,22 +833,36 @@
 
 
   (defn translate-function-invocations
+    "Translates some CCL functions to SQL."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
          (walk/prewalk interpret-function-invocations)))))
 
+(def translations
+ [translate-equals-to-like
+  translate-field-aliases
+  translate-strings
+  translate-function-invocations])
+
+(defn about-translations
+  []
+  #?(:clj
+      (map str translations)
+     :cljs
+     (-> []
+         (into (map #(string/replace (.-name %) #".+\$" "") translations))
+         (into (map #(str "CCL Function: " (name %)) (keys (dissoc (methods translate-function-invocation) :default)))))))
 
 (defn ccl->sql-and-report
   [ccl]
   (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
-        translated-ast  (-> ast
-                            assert-ast-node
-                            translate-equals-to-like
-                            translate-field-aliases
-                            translate-strings
-                            translate-function-invocations
-                            assert-ast-node)
-        translated-sql  (emit-string [translated-ast remaining])
+        translations (-> (into [assert-ast-node] translations)
+                         (conj assert-ast-node))
+        translated-ast (reduce
+                          #(%2 %1)
+                          ast
+                          translations)
+        translated-sql (emit-string [translated-ast remaining])
         sql translated-sql]
     [sql
      (with-out-str

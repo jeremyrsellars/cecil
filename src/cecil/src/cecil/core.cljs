@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as string]
    [clojure.pprint :as pprint]
+   [cljs.repl :refer [doc]]
    [sablono.core :as sab :include-macros true]
    [cecil.cki :as cki]
    [cecil.util :as util]
@@ -12,14 +13,19 @@
 (defn app
   []
   [:div
-   [:h3 "CiCiL performs simple pattern-based transformations from CCL to Oracle SQL."]
-   [:ol
+   [:h3 "CiCiL performs pattern-based transformations from CCL to Oracle SQL."]
+   [:h4 "Supported CCL Functions."]
+   [:ol {:key "shallow"}
     (map #(vector :li (string/upper-case %))
       (cts/about-regexes))]
    "It also uses a CKI when available."
+   [:h4 "Supported deep transformations:"]
+   [:ol {:key "deep"}
+    (map-indexed #(vector :li {:key %1} (str %2))
+      (cts/about-translations))]
    [:div {:key "usage"}
      [:h3 "Usage"]
-     [:ol
+     [:ol {:key "ol"}
       (map-indexed #(vector :li {:key %1} %2)
         ["Paste your CCL."
          "Click Translate."])]]])
