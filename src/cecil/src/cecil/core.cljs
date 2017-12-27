@@ -7,7 +7,7 @@
    [cecil.cki :as cki]
    [cecil.util :as util]
    [cecil.ccl-to-sql :as cts]
-   [react :as react]))
+   [cljsjs.react.dom]))
 
 (enable-console-print!)
 
@@ -35,7 +35,7 @@
   ;; conditionally start the app based on whether the #main-app-area
   ;; node is on the page
   (when-let [node (.getElementById js/document "main-app-area")]
-    (.render js/ReactDOM (sab/html (app))
+    (js/ReactDOM.render (sab/html (app))
      node)))
 
 (main)
