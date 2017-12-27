@@ -538,8 +538,6 @@
           raw-filter-expressions)
 
         table-def (get table-aliases alias alias-kw)
-        ; _ (println :table-aliases table-aliases)
-        ; _ (println :td alias '-> table-def)
         replacement-keyword
           (case keyword
             :plan "from"
@@ -558,41 +556,24 @@
 
 (defn reinterpret-plans
   [nodes table-aliases]
-  ; (println :nodes nodes)
-  ; (println :plan-sections)
-  ; (pprint/pprint (plan-sections nodes))
   (if-not (seq nodes)
     []
     (let [[from & joins] (map interpret-plan (plan-sections nodes) (repeat table-aliases))
           where (assoc from
                   :type :where
                   :nodes (get from :filter-expressions))
-           ; _ (println :where where)
-           ; _ (pprint/pprint from)
-           ; _ (println :joins)
-           ; _ (pprint/pprint joins)
-           ;_ (println :fe (get from :filter-expressions))
            join-expressions
              (-> []
                  (conj (assert-ast-node (dissoc from :filter-expressions)))
                  (into (assert-ast-nodes (map #(dissoc % :filter-expressions) joins)))
                  (conj (assert-ast-node (dissoc where :filter-expressions))))]
-
-
-      ; (pprint/pprint (->> ;(map update join-expressions (repeat :nodes) (repeat count))
-      ;                     join-expressions
-      ;                     (map #(dissoc % :filter-expressions))
-      ;                     (vector :join-expressions)))
-      ; (pprint/pprint (last join-expressions))
       (assert-ast-nodes join-expressions))))
-      ;join-expressions)))
 
 (defn reinterpret-from
   [{:keys [nodes] :as expression}]
   (let [is-from? (fn is-from? [{:keys [type keyword]}] (and (= type :keyword) (= keyword :from)))
         terminates-joins? (fn terminates-joins?
                             [{:keys [type keyword]}]
-                            ;(println ::tj? type keyword)
                             (contains? #{:group-by :order-by :terminal} type))
         terminates-from? (fn terminates-from?
                             [{:keys [type keyword] :as ast-node}]
@@ -601,20 +582,12 @@
                                 (terminates-joins? ast-node)))
         ast-nodes nodes
         [before-from from-etc] (split-with (complement is-from?) ast-nodes)
-        ;_ (println :before-from before-from)
         [from aliases-etc] (split-with is-from? from-etc)
-        ;_ (println :from from)
         [aliases after-from] (split-with (complement terminates-from?) aliases-etc)
         table-aliases (table-aliases-map aliases-etc)
-        ; _ (println :table-aliases table-aliases)
         [joins after-joins] (split-with (complement terminates-joins?) after-from)
-        ; _ (println :after-from after-from)
-        ; _ (pprint/pprint [:after-joins after-joins])
-        ; _ (pprint/pprint [:joins joins])
         join-expressions (reinterpret-plans joins table-aliases)
-        ;_ (println :join-expressions join-expressions)
 
-        ;_ (println :join-expressions join-expressions)
         nodes
         (-> []
             (into before-from)
@@ -640,17 +613,11 @@
         [ws tokens] (next-whitespaces-and-comments-as-string tokens)
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
-        ; _ (println :select-list-parsed select-list-parsed)
-        ;_ (println :ne (map :type (:nodes next-expression)))
         from (maybe-reinterpret-from next-expression)
-        ;_ (println :from from)
         select-list
         {:type :select-list
          :leading-whitespace ws
          :nodes (assert-ast-nodes select-list-parsed)}]
-     ; (pprint/pprint :from)
-     ; (pprint/pprint from)
-     ; (println ::parse-select (emit-string from))
    (assert-ast-node-and-tokens
      [{:type :select
        :nodes [kw
@@ -679,9 +646,7 @@
 
   (defn emit-string
     [ast-nodes]
-    ;(println ::emit-string ast-nodes)
     (->> ast-nodes
-         ; assert-ast-nodes
          emit-tokens
          (string/join ""))))
 
@@ -690,14 +655,12 @@
           :nodes ["AS"]}]
  (letfn [(alias-rearranger
            [{:keys [expression alias] :as n}]
-           ;(println :alias-rearranger n)
            (let [pre-ws1 (get-in alias      [:nodes 0 :leading-whitespace])
                  pre-ws2 (get-in expression [:nodes 0 :leading-whitespace])
                  pre-ws (or pre-ws1 pre-ws2)
                  rearranged
                   (cond-> [(assoc-in expression [:nodes 0 :leading-whitespace] pre-ws)]
                     alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))]
-            ;(println :alias-rearranged rearranged)
             (assoc n
               :nodes (assert-ast-nodes rearranged))))
 
@@ -717,7 +680,6 @@
 
 (defn ccl-string-value
   [^String ccl-string]
-  (println :ccl-string-value ccl-string)
   (when (some? ccl-string)
     ; to-do: de-escape the string... I don't know how/if ccl strings are escaped in literals
     (subs ccl-string 1 (dec (count ccl-string)))))
@@ -752,13 +714,88 @@
     (->> ast-node-or-nodes
          (walk/prewalk change-strings-from-ccl-to-sql)))))
 
+(let [like-regex #"\*"
+      filter-expression?
+        (fn [{:keys [type] :as expr}]
+          (and
+            (or (= type :where)
+                (= type :join))))
+      wildcard-string-expression?
+        (fn [{:keys [type] :as expr}]
+          (and
+            (or (= type :string-single)
+                (= type :string-double))
+            (->> (get expr :nodes)
+                 first
+                 (re-find like-regex)
+                 boolean)))
+      equals-expression?
+        (fn [{:keys [type] :as expr}]
+          (or (= type :equals)
+              (= type :not-equals)))
+      like-substitutions
+      {:equals
+       {:type :keyword
+        :keyword :like
+        :leading-whitespace " "
+        :nodes ["like"]}
+       :not-equals
+       {:type :keyword
+        :keyword :not-like
+        :leading-whitespace " "
+        :nodes ["not like"]}}
+      replace-equals
+      (fn replace-equals
+        [{:keys [type] :as n}]
+        (get like-substitutions type n))
+      replace-str
+      (fn replace-str
+        [expr]
+        (update-in expr [:nodes 0] string/replace like-regex "%"))]
+ (letfn [(translate-like
+          [{:keys [nodes] :as filter-expression}]
+          (let [translate-indexes
+                (->> nodes     ; look for :equals :string
+                     count dec ; count - 1 because
+                     range
+                     (filter #(and (->> %     (nth nodes) equals-expression?)
+                                   (->> % inc (nth nodes) wildcard-string-expression?))))
+                translated-nodes
+                (reduce
+                  (fn [nodes equals-idx]
+                    (let [str-idx (inc equals-idx)]
+                      (-> (into [] nodes)
+                          (update equals-idx replace-equals)
+                          (update str-idx replace-str))))
+                  nodes
+                  translate-indexes)]
+            (assoc filter-expression :nodes translated-nodes)))
+
+         (translate-like-if-node
+          [x]
+          (if (and (map? x)
+                   (contains? x :type))
+            (translate-like x)
+            x))
+
+         (translate-like-in-filter-expressions
+          [x]
+          (if (and (map? x)
+                   (filter-expression? x))
+            (walk/prewalk translate-like-if-node x)
+            x))]
+
+  (defn translate-equals-to-like
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk translate-like-in-filter-expressions)))))
+
 (defn unwrap-function-invocation
   "Gets the function argument (single argument expression, or arguments as parenthetical-expression)"
   [{:keys [nodes] :as function-invocation-expression}]
   (let [leading-whitespace (get-in nodes [0 :leading-whitespace])
         {parenthetical-nodes :nodes :as parenthetical}
         (first (filter is-parenthetical-expression? nodes))]
-    (pprint/pprint [:unwrap-function-invocation parenthetical-nodes])
     (update
       (if (= 3 (count parenthetical-nodes)) ; 3 <- "(" expr ")"
         (nth parenthetical-nodes 1)
@@ -797,57 +834,18 @@
     (->> ast-node-or-nodes
          (walk/prewalk interpret-function-invocations)))))
 
- ; (letfn [(simplify-parenthetical
- ;           [{:keys [type sub-type nodes] :as outer}]
- ;           (let [inner (first nodes)
- ;                 pre-ws-outer (get outer :leading-whitespace)
- ;                 pre-ws-inner (get inner :leading-whitespace)
- ;                 pre-ws (or pre-ws-outer pre-ws-inner)]
- ;              (assoc inner :leading-whitespace pre-ws)))
-
- ;         (simplify-parenthetical-expression
- ;          [{:keys [type sub-type nodes] :as ast-node}]
- ;          (let [non-paren-nodes (remove #(token-of-type? % :lparen :rparen) nodes)]
- ;            (cond
- ;              (or (not (is-parenthetical-expression? ast-node))
- ;                  (not= 1 (count non-paren-nodes))
- ;                  (not (is-parenthetical-expression? (first non-paren-nodes))))
- ;              ast-node
-
- ;              :else
- ;              (simplify-parenthetical ast-node))))]
-
- ;  (defn simplify-parenthetical-expressions
- ;    [ast-nodes]
- ;    (->> ast-nodes
- ;         (walk/prewalk simplify-parenthetical-expression)
- ;         flatten
- ;         (filter some?)))))
-
-
-; (defn simplify-sql
-;   [sql]
-;   (let [[ast remaining] (tokenize-and-parse sql)
-;         simplified         (->> ast
-;                                 simplify-parenthetical-expressions)
-;         simplified-sql     (emit-string [simplified remaining])]
-;     (replace-all simplified-sql)))
-
 
 (defn ccl->sql-and-report
   [ccl]
   (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
         translated-ast  (-> ast
                             assert-ast-node
+                            translate-equals-to-like
                             translate-field-aliases
                             translate-strings
                             translate-function-invocations
-                            assert-ast-node
-                            identity)
-        ; _ (pprint/pprint [:translated-ast translated-ast])
-        ;translated-sql  (emit-string [ast remaining])
+                            assert-ast-node)
         translated-sql  (emit-string [translated-ast remaining])
-        ; simplified-sql  (simplify-sql translated-sql)
         sql translated-sql]
     [sql
      (with-out-str
