@@ -27,6 +27,7 @@
                                     "target"]
 
   :source-paths ["src"]
+  :main cecil.cli
 
   :cljsbuild {
               :builds [{:id "devcards"
