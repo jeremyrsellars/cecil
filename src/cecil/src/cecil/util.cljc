@@ -11,4 +11,4 @@
 
 (defn canonical-whitespace
   [s]
-  (string/trim (string/replace s tokens-regex #(if (string/blank? %) " " %))))
+  (string/replace s tokens-regex #(if (string/blank? %) " " %)))

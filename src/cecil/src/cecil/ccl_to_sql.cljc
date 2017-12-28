@@ -344,11 +344,12 @@
 
 (defn canonical-whitespace-and-comments
   [s]
-  (util/canonical-whitespace ; a second-pass for consecutive tokens
-    (string/replace (str s) util/tokens-regex
-     #(if (is-whitespace-or-comment %)
-        " "
-        %))))
+  (string/trim
+    (util/canonical-whitespace ; a second-pass for consecutive tokens
+      (string/replace (str s) util/tokens-regex
+       #(if (is-whitespace-or-comment %)
+          " "
+          %)))))
 
 
 (declare parse-select)
