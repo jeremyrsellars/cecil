@@ -309,7 +309,7 @@
            ; In the middle of repurposing the testtranslate method.... probably want 2 diferemnt methods. 1. select. 2. from...
            (test-translate-2
               [test-name ccl expected-sql]
-              (let [actual-sql (cts/translateAll ccl)]
+              (let [[actual-sql _] (cts/ccl->sql-and-report ccl)]
                (testing test-name
                 (is (= (cts/canonical-whitespace-and-comments expected-sql)
                        (cts/canonical-whitespace-and-comments actual-sql))

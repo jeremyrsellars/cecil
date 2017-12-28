@@ -345,7 +345,7 @@
 (defn canonical-whitespace-and-comments
   [s]
   (util/canonical-whitespace ; a second-pass for consecutive tokens
-    (string/replace s util/tokens-regex
+    (string/replace (str s) util/tokens-regex
      #(if (is-whitespace-or-comment %)
         " "
         %))))
@@ -772,6 +772,22 @@
     (->> ast-node-or-nodes
          (walk/prewalk change-strings-from-ccl-to-sql)))))
 
+(let [why? "because letfn can collide - https://dev.clojure.org/jira/browse/CLJS-1965"]
+ (letfn [(change-comments-from-ccl-to-sql
+          [x]
+          (if-let [ws (and (map? x)
+                           (get x :leading-whitespace))]
+            (report-change "Single-line comment"
+              x
+              (update x :leading-whitespace string/replace #"(?m)^(\s*);+" "$1--"))
+            x))]
+
+  (defn translate-comments
+    "Changes from `\"a\"` to `'a'`."
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk change-comments-from-ccl-to-sql)))))
+
 (let [like-regex #"\*"
       filter-expression?
         (fn [{:keys [type] :as expr}]
@@ -910,6 +926,7 @@
  [translate-equals-to-like
   translate-field-aliases
   translate-strings
+  translate-comments
   translate-function-invocations])
 
 (defn about-translations
@@ -925,7 +942,8 @@
 
 (defn ccl->sql-and-report
   [ccl]
-  (let [sql-atom (atom "")
+  (let [x-atom (atom {})
+        verbose? false
         report
         (with-out-str
           (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
@@ -936,9 +954,16 @@
                                   ast
                                   translations)
                 translated-sql (emit-string [translated-ast remaining])]
-             (reset! sql-atom translated-sql)))]
-    [@sql-atom
-     report]))
+             (reset! x-atom {:sql translated-sql
+                             :ast translated-ast})))
+        {:keys [sql ast]} @x-atom]
+    [sql
+     (cond-> report
+       verbose?
+       (str
+         "\r\n=========================================================\r\n"
+         (with-out-str
+            (pprint/pprint ast))))]))
 
 #?(:cljs
     (defn ^:export translateAll
