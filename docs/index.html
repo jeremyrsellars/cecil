@@ -34,7 +34,8 @@
         </a>
         <div id='ccl-cm-container'></div>
         <textarea id='cclArea' rows=40 cols=100>
-  select distinct
+  select distinct    ; single-line comment;
+                     ; another single-line comment
     sir.item_id,
     ocs.catalog_cd,
     ITEM_PRIMARY = uar_get_code_display(ocir.catalog_cd),
@@ -48,6 +49,9 @@
     synonym_item_r sir,
     order_catalog_synonym ocs,
     med_identifier mi
+  /* CCL-style join plans
+     get replaced with SQL-style explicit joins.
+  */
   plan sir
   where sir.item_id not in (
     select
@@ -98,15 +102,16 @@
         var semiAutomate = function semiAutomate(){
             var sqlOrError = ""
             var ccl = cclCM.getValue("\r\n")
+            var report = ""
             try {
-                sqlOrError = cecil.ccl_to_sql.translateAll(ccl)
+                var x = cecil.ccl_to_sql.translateAll(ccl)
+                sqlOrError = x[0]
+                report = x[1]
             } catch (e) {
                 console.error(e)
-                sqlOrError = e.toString()
+                sqlOrError = report = e.toString()
             }
             sqlCM.setValue(sqlOrError);
-
-            var report = cecil.ccl_to_sql.report(ccl)
 
             reportCM.setValue(report)
         }
