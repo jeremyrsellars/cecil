@@ -14,7 +14,7 @@
   (letfn [(is-tokenized-correctly [s tokens]
             (testing s
               (is (= tokens (util/tokenize s)))))
-          (is-tokenized-correctly2 [tokens]
+          (is-tokenized-correctly-from-tokens [tokens]
             (is-tokenized-correctly
               (string/join "" tokens)
               tokens))]
@@ -31,9 +31,11 @@
        "1 /*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"
        ["1" " " "/*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"])
 
-    (is-tokenized-correctly2
-       ["select" " " "1" " " "from" " " "x" " " "group" "group by" " " "1" " " "order      by" " " "1"])))
+    (is-tokenized-correctly-from-tokens
+       ["select" " " "1" " " "from" " " "x" " " "group" "group by" " " "1" " " "order      by" " " "1"])
 
+    (is-tokenized-correctly-from-tokens
+       ["select" " " "count" "(" "cv" "." "code_value" ")" " " "from" " " "location" " " "l" "," " " "location_group" " " "lg" " " "plan" " " "l" " " "where" " " "l" "." "location_type_cd" "=" "123" " " "join" " " "lg"])))
 
 (deftest whitespace-canonicalized-correctly
   (letfn [(is-canonicalized-correctly [s expected]
