@@ -98,15 +98,16 @@
         var semiAutomate = function semiAutomate(){
             var sqlOrError = ""
             var ccl = cclCM.getValue("\r\n")
+            var report = ""
             try {
-                sqlOrError = cecil.ccl_to_sql.translateAll(ccl)
+                var x = cecil.ccl_to_sql.translateAll(ccl)
+                sqlOrError = x[0]
+                report = x[1]
             } catch (e) {
                 console.error(e)
-                sqlOrError = e.toString()
+                sqlOrError = report = e.toString()
             }
             sqlCM.setValue(sqlOrError);
-
-            var report = cecil.ccl_to_sql.report(ccl)
 
             reportCM.setValue(report)
         }

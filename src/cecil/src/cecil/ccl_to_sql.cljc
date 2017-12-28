@@ -7,9 +7,21 @@
    [cecil.cki :as cki]
    [cecil.util :as util]))
 
-;; uar_get_code_by
-
 (declare emit-string)
+
+(defn report-change
+  [description before after]
+  (let [before-string (if (string? before) before (emit-string before))
+        after-string  (if (string? after)  after  (emit-string after))]
+    (when (not= before-string after-string)
+      (println "-------------------------------------------------------------")
+      (println (str "-- " description ":"))
+      (println "   /* Before */    " before-string)
+      (println "   /* After  */    " after-string)
+      (println "-------------------------------------------------------------"))
+    after))
+
+;; uar_get_code_by
 
 (def uar_get_code_by-regex
   #"(?i)\buar_get_code_by\s*\(\s*\"([^\"]+)\"\s*,\s*(\d+)\s*,\s*\"([^\"]+)\"\s*\)")
@@ -133,7 +145,7 @@
   (apply comp fns)))
 
 
-(defn  ^:export report
+(defn ^:export report
   [ccl]
   (let [matches (mapcat
                   #(let [ms (re-seq % ccl)]
@@ -222,7 +234,7 @@
    ;:order :group :by  ; somehwere else because of whitespace
    :having})
 
-(def unomynous-token->type
+(def unomynous-token->type ; tokens with a single representation (name)
   {"." :dot
    "," :comma
    "=" :equals
@@ -347,7 +359,7 @@
   (let [ws? (or (valid-string? :whitespace t1)
                 (valid-string? :comment t1))]
     (if ws?
-      (assoc-in (next-token rst) [0 :leading-whitespace] t1) ; remember, next-token is [t rest]
+      (update-in (next-token rst) [0 :leading-whitespace] #(str t1 %)) ; remember, next-token is [t rest]
       [(string->token t1)
        (vec rst)])))
 
@@ -386,6 +398,10 @@
     (loop [parts [nt]
            tokens tokens]
       (let [[nt remaining] (next-token tokens)]
+        (when (token-of-type? nt :terminal)
+          (pprint/pprint ["WARNING: unterminated parenthetical-expression:"
+                          parts]))
+
         (cond
           (token-of-type? nt :rparen :terminal)
           [{:type :expression :sub-type :parenthetical
@@ -475,7 +491,6 @@
    (assert-ast-node-and-tokens
       (if (token-of-type? nt :equals)
         (let [[part2 remaining2] (parse-field-definition remaining)
-              ;[part2 remaining3] (parse-field-definition remaining2)
               {:keys [nodes], alias :expression} (first field-definitions)]
           [{:type :field-definition
             :nodes (assert-ast-nodes (into (conj nodes nt) (get part2 :nodes)))
@@ -614,7 +629,6 @@
         nodes
         (-> []
             (into before-from)
-            ;(into from)
             (into join-expressions)
             (into after-joins))]
    (assert-ast-node
@@ -693,9 +707,16 @@
                     (some some? (get expression :nodes))
                     (conj (assoc-in expression [:nodes 0 :leading-whitespace] pre-ws))
 
-                    alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))]
-            (assoc n
-              :nodes (assert-ast-nodes rearranged))))
+                    alias (conj as (assoc-in alias [:nodes 0 :leading-whitespace] " ")))
+                 rearranged-node
+                  (assoc n
+                    :nodes (assert-ast-nodes rearranged))
+                 original-string (emit-string n)
+                 rearranged-string (emit-string rearranged-node)]
+
+              (report-change "Rearranged alias"
+                n rearranged-node)
+              rearranged-node))
 
          (change-alias
           [x]
@@ -714,7 +735,7 @@
 
 (defn ccl-string-value
   [^String ccl-string]
-  (when (some? ccl-string)
+  (when (and (string? ccl-string) (>= (count ccl-string) 2))
     ; to-do: de-escape the string... I don't know how/if ccl strings are escaped in literals
     (subs ccl-string 1 (dec (count ccl-string)))))
 
@@ -737,9 +758,11 @@
           [x]
           (if (and (map? x)
                    (= :string-double (get x :type)))
-            (-> x
-                (update-in [:nodes 0] ccl-string->sql-string)
-                (assoc :type :string-single))
+            (let [sql (-> x
+                          (update-in [:nodes 0] ccl-string->sql-string)
+                          (assoc :type :string-single))]
+              (report-change "String literal" x sql)
+              sql)
             x))]
 
 
@@ -786,7 +809,9 @@
       replace-str
       (fn replace-str
         [expr]
-        (update-in expr [:nodes 0] string/replace like-regex "%"))]
+        (-> expr
+          (update-in [:nodes 0] string/replace like-regex "%")
+          (update :leading-whitespace #(if (empty? %) " " %))))]
  (letfn [(translate-like
           [{:keys [nodes] :as filter-expression}]
           (let [translate-indexes
@@ -803,8 +828,13 @@
                           (update equals-idx replace-equals)
                           (update str-idx replace-str))))
                   nodes
-                  translate-indexes)]
-            (assoc filter-expression :nodes translated-nodes)))
+                  translate-indexes)
+
+                translated-node
+                (assoc filter-expression :nodes translated-nodes)]
+            (report-change "Translated like string" filter-expression translated-node)
+            translated-node))
+
 
          (translate-like-if-node
           [x]
@@ -832,11 +862,13 @@
   (let [leading-whitespace (get-in nodes [0 :leading-whitespace])
         {parenthetical-nodes :nodes :as parenthetical}
         (first (filter is-parenthetical-expression? nodes))]
+   (report-change "Unwrap superfluous"
+    function-invocation-expression
     (update
       (if (= 3 (count parenthetical-nodes)) ; 3 <- "(" expr ")"
         (nth parenthetical-nodes 1)
         parenthetical)
-      :leading-whitespace (partial str leading-whitespace))))
+      :leading-whitespace (partial str leading-whitespace)))))
 
 (defmulti translate-function-invocation
   (fn [expression]
@@ -844,8 +876,11 @@
 
 (defmethod translate-function-invocation :default
   [expression]
-  ; no change
-  (println "WARNING: Unsupported function invocation: " (get expression :function))
+  (println "------------------------------------------------------------------")
+  (println "-- WARNING: CeCiL will not transform this function invocation: "
+    (name (get expression :function)))
+  (println (emit-string expression))
+  (println "------------------------------------------------------------------")
   expression)
 
 (defmethod translate-function-invocation :value
@@ -890,21 +925,23 @@
 
 (defn ccl->sql-and-report
   [ccl]
-  (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
-        translations (-> (into [assert-ast-node] translations)
-                         (conj assert-ast-node))
-        translated-ast (reduce
-                          #(%2 %1)
-                          ast
-                          translations)
-        translated-sql (emit-string [translated-ast remaining])
-        sql translated-sql]
-    [sql
-     (with-out-str
-        (pprint/pprint
-          (tokenize-and-parse sql)))]))
+  (let [sql-atom (atom "")
+        report
+        (with-out-str
+          (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
+                translations (-> (into [assert-ast-node] translations)
+                                 (conj assert-ast-node))
+                translated-ast (reduce
+                                  #(%2 %1)
+                                  ast
+                                  translations)
+                translated-sql (emit-string [translated-ast remaining])]
+             (reset! sql-atom translated-sql)))]
+    [@sql-atom
+     report]))
 
-(defn ^:export translateAll
-  [ccl]
-  (let [[sql report] (ccl->sql-and-report ccl)]
-    sql))
+#?(:cljs
+    (defn ^:export translateAll
+      [ccl]
+      (let [[sql report] (ccl->sql-and-report ccl)]
+        #js [sql report])))
