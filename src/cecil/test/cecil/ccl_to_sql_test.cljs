@@ -24,6 +24,9 @@
 (def example-leftjoin-ccl (insert-file-contents-string "resources/example-leftjoin/detail.ccl"))
 (def example-leftjoin-sql (insert-file-contents-string "resources/example-leftjoin/detail.sql"))
 
+(def example-count-ccl (insert-file-contents-string "resources/example-count/detail.ccl"))
+(def example-count-sql (insert-file-contents-string "resources/example-count/detail.sql"))
+
 (def example-field-alias-ccl (insert-file-contents-string "resources/example-field-alias/detail.ccl"))
 (def example-field-alias-sql (insert-file-contents-string "resources/example-field-alias/detail.sql"))
 
@@ -192,6 +195,56 @@
       "CNVTUPPER (pt.qty),"
       "UPPER(pt.qty) /*CNVTUPPER (pt.qty)*/),")))
 
+(deftest next-token_produces_ast_nodes
+  (letfn [(test-string [s expected-token-nodes]
+            (testing s
+              (let [tokens (util/tokenize s)
+                    nodes (loop [nodes []
+                                 rst tokens]
+                            (if (empty? rst)
+                              nodes
+                              (let [[nt remaining] (cts/next-token rst)]
+                                (recur
+                                  (conj nodes nt)
+                                  remaining))))]
+                (is (= expected-token-nodes
+                       nodes)))))
+
+          (test-identifier [s]
+            (test-string (str " " s " ")
+              [{:type :identifier
+                :nodes [s]
+                :leading-whitespace " "}
+               {:type :terminal
+                :nodes []
+                :leading-whitespace " "}]))]
+
+
+    (test-string " select  1"
+      [{:type :keyword
+        :keyword :select
+        :nodes ["select"]
+        :leading-whitespace " "}
+       {:type :number
+        :nodes ["1"]
+        :leading-whitespace "  "}])
+
+    (test-string "select aGroup"
+      [{:type :keyword
+        :keyword :select
+        :nodes ["select"]}
+       {:type :identifier
+        :nodes ["aGroup"]
+        :leading-whitespace " "}])
+
+    (test-identifier "aGroup")
+    (test-identifier "GroupA")
+    (test-identifier "aOrder")
+    (test-identifier "OrderA")
+    (test-identifier "aSelect")
+    (test-identifier "SelectA")))
+
+
 (let [keyword-select
         {:type :keyword
          :keyword :select
@@ -306,7 +359,6 @@
                        " -> "
                        expected-sql)))))
 
-           ; In the middle of repurposing the testtranslate method.... probably want 2 diferemnt methods. 1. select. 2. from...
            (test-translate-2
               [test-name ccl expected-sql]
               (let [[actual-sql _] (cts/ccl->sql-and-report ccl)]
@@ -429,6 +481,10 @@
         example-field-alias-ccl
         example-field-alias-sql)
 
+      (test-translate-2 "example-count"
+        example-count-ccl
+        example-count-sql)
+
       (test-translate-2 "example-where"
         example-where-ccl
         example-where-sql)
@@ -452,6 +508,8 @@
       (test-translate-2 "1930-detail"
         detail-1930-ccl
         detail-1930-sql)))))
+
+
 
 
 (defcard overall-translation

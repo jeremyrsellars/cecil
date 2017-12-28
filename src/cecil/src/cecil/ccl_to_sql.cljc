@@ -247,8 +247,8 @@
   (or
     (get unomynous-token->type s)
     (cond
-      (re-find #"(?i)group(?:\s+by)?" s) :group-by
-      (re-find #"(?i)order\s+by" s)      :order-by
+      (re-find #"(?i)\bgroup(?:\s+by)?\b" s) :group-by
+      (re-find #"(?i)\border\s+by\b" s)      :order-by
       (re-find #"^'" s)                  :string-single
       (re-find #"^\"" s)                 :string-double
       (re-find #"^\d" s)                 :number)))
@@ -944,7 +944,7 @@
 (defn ccl->sql-and-report
   [ccl]
   (let [x-atom (atom {})
-        verbose? false
+        verbose? true
         report
         (with-out-str
           (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))

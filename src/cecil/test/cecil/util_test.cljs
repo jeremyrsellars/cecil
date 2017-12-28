@@ -32,10 +32,16 @@
        ["1" " " "/*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"])
 
     (is-tokenized-correctly-from-tokens
-       ["select" " " "1" " " "from" " " "x" " " "group" "group by" " " "1" " " "order      by" " " "1"])
+       ["select" " " "1" " " "from" " " "x" " " "group" " " "group by" " " "1" " " "order      by" " " "1"])
 
     (is-tokenized-correctly-from-tokens
-       ["select" " " "count" "(" "cv" "." "code_value" ")" " " "from" " " "location" " " "l" "," " " "location_group" " " "lg" " " "plan" " " "l" " " "where" " " "l" "." "location_type_cd" "=" "123" " " "join" " " "lg"])))
+       ["select" " " "count" "(" "cv" "." "code_value" ")" " " "from" " " "location" " " "l" "," " " "location_group" " " "lg" " " "plan" " " "l" " " "where" " " "l" "." "location_type_cd" "=" "123" " " "join" " " "lg"])
+
+    (is-tokenized-correctly-from-tokens
+       [" " "group" " " "GROUP   BY" " " "group" " " "bypass"])
+
+    (is-tokenized-correctly-from-tokens
+       [" " "order" " " "ORDER   BY" " " "order" " " "bypass"])))
 
 (deftest whitespace-canonicalized-correctly
   (letfn [(is-canonicalized-correctly [s expected]

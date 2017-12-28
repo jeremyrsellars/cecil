@@ -1,0 +1,9 @@
+select
+    count(cv.code_value)
+from
+    location l,
+    location_group lg
+plan l
+    where l.location_type_cd = 123
+join lg
+    where lg.parent_loc_cd = l.location_cd
