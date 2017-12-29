@@ -18,6 +18,14 @@
   [x]
   (and (map? x) (contains? x :type)))
 
+(defn is-parenthetical-expression?
+  [ast-node]
+  (boolean
+    (when (associative? ast-node)
+      (let [{:keys [type sub-type nodes]} ast-node]
+          (and (= sub-type :parenthetical)
+               (= type :expression))))))
+
 (defn minimal-whitespace
   [s]
   (cond
@@ -34,7 +42,6 @@
 (defn remove-leading-whitespace-in-first-node
   "Traverses the ast-node tree and removes all leading-whitespace on the path to the first leaf."
   [{:keys [nodes] :as ast-node}]
-  (println :rlwifn ast-node)
   (cond-> ast-node
     true
     (dissoc :leading-whitespace)
@@ -55,34 +62,95 @@
    :having})
 
 (defmulti relative-indent
-  (fn [ancestor-nodes {:keys [type] :as token}]
+  (fn [ancestor-nodes {:keys [type] :as ast-node}]
     type))
 
 (defmethod relative-indent :default
-  [_ {:keys [type keyword] :as token}]
-  (if (and (= type :keyword) (contains? top-level-keywords keyword))
-    0
-    1))
+  [_ _]
+  0)
 
 (defmulti node-own-line?
-  (fn [ancestor-nodes {:keys [type] :as token}]
+  (fn [ancestor-nodes {:keys [type] :as ast-node}]
     type))
 
-(defmethod node-own-line? :field-definition
-  [_ {:keys [type keyword] :as token}]
-  true)
+(defmethod node-own-line? :default
+  [_ {:keys [type keyword] :as ast-node}]
+  false)
+
 
 (defmethod node-own-line? :expression
-  [_ {:keys [type keyword] :as token}]
-  false)
+  [ancestor-nodes {:keys [type keyword sub-type] :as ast-node}]
+  (case sub-type
+    :parenthetical
+    (if-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
+      (not (= :function-invocation ancester-type))
+      false)
+    false))
+
+(defmethod relative-indent :expression
+  [ancestor-nodes ast-node]
+  (or
+    (when-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
+      (println
+        :relative-indent
+        :at ancester-type
+        :not-fi (not= ancester-type :function-invocation)
+        :paren (is-parenthetical-expression? ast-node)
+        :sql (cts/emit-string ancestor))
+      (cond
+        (and (not= ancester-type :function-invocation)
+             (is-parenthetical-expression? ast-node))
+        2
+
+        (node-own-line? ancestor-nodes ast-node)
+        1))
+
+    0))
+
+(defmethod relative-indent :field-conjunction
+  [_ _]
+  1)
+
+(defmethod relative-indent :field-definition
+  [_ _]
+  1)
+
+(defmethod node-own-line? :field-definition
+  [_ {:keys [type keyword] :as ast-node}]
+  true)
+
+(defmethod node-own-line? :group-by
+  [ancestor-nodes {:keys [keyword] :as ast-node}]
+  true)
+
+(defmethod node-own-line? :order-by
+  [ancestor-nodes {:keys [keyword] :as ast-node}]
+  true)
+
+(defmethod node-own-line? :keyword
+  [ancestor-nodes {:keys [keyword] :as ast-node}]
+  (or
+    (contains? top-level-keywords keyword)
+    (= keyword :and)
+    (= keyword :or)))
+
+
+(defmethod relative-indent :keyword
+  [ancestor-nodes {:keys [keyword] :as ast-node}]
+  (cond
+    (contains? top-level-keywords keyword)
+    0
+
+    :default
+    (if-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
+      (if (and (= :select ancester-type) (= :distinct keyword))
+        0
+        0)
+      nil)))
 
 (defmethod node-own-line? :whitespace
-  [_ {:keys [type keyword] :as token}]
+  [_ {:keys [type keyword] :as ast-node}]
   false)
-
-(defmethod node-own-line? :default
-  [_ {:keys [type keyword] :as token}]
-  (and (= type :keyword) (contains? top-level-keywords keyword)))
 
 
 (declare parse-select)
@@ -144,14 +212,6 @@
           :else
           (let [[expr remaining] (parse-expression tokens #(token-of-type? % :rparen :comma))]
               (recur (conj parts expr) remaining)))))))
-
-(defn is-parenthetical-expression?
-  [ast-node]
-  (boolean
-    (when (associative? ast-node)
-      (let [{:keys [type sub-type nodes]} ast-node]
-          (and (= sub-type :parenthetical)
-               (= type :expression))))))
 
 (defn parse-expression
   [tokens & terminal-fns]
@@ -234,26 +294,33 @@
 
 (defn insert-newline-after-commas-etc
   [{:keys [nodes] :as ast-node}]
-  (if (< (count nodes) 2)
+  (if (> 2 (count nodes))
     ast-node
-    (assoc ast-node
-      :nodes
-      (into []
-        (cons (first nodes)
-          (map
-            (fn [{prev-indent :indent, prev-keyword :keyword :as prev-node} {:keys [indent] :as node}]
-              (let [{:keys [own-line?] :as new-node}
-                    (cond-> node
-                      (token-of-type? prev-node :comma)
-                      (assoc :own-line? true)
+    (let [{:keys [type sub-type]} ast-node
+          lazy-should-break-on-commas
+          (delay (or (not= :expression type)
+                     (not= :parenthetical sub-type)
+                     (<= 60 (count (cts/emit-string ast-node)))))]
+      (assoc ast-node
+        :nodes
+        (into []
+          (cons (first nodes)
+            (map
+              (fn [{prev-indent :absolute-indent, prev-keyword :keyword :as prev-node} {:keys [absolute-indent] :as node}]
+                (let [{:keys [own-line?] :as new-node}
+                      (cond-> node
+                        (and (token-of-type? prev-node :comma) @lazy-should-break-on-commas)
+                        (assoc :own-line? true)
 
-                      (and (not= indent prev-indent) (not= prev-keyword :select))
-                      (assoc :own-line? true))]
-                (cond-> new-node
-                  own-line?
-                  remove-leading-whitespace-in-first-node)))
-            nodes
-            (rest nodes)))))))
+                        (and (some? prev-indent)
+                             (not= absolute-indent prev-indent)
+                             (not= prev-keyword :select))
+                        (assoc :own-line? true))]
+                  (cond-> new-node
+                    own-line?
+                    remove-leading-whitespace-in-first-node)))
+              nodes
+              (rest nodes))))))))
 
 (defn parse-select
   [tokens]
@@ -264,7 +331,14 @@
                               [nil tokens]))
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
-        from-etc next-expression
+        from-etc (update next-expression
+                    :nodes (fn [nodes]
+                              (map
+                                (fn [{:keys [keyword type] :as node}]
+                                  (cond-> node
+                                    (not (contains? top-level-keywords (or keyword type)))
+                                    (assoc :indent 1)))
+                                nodes)))
         select-list
         {:type :select-list
          :nodes (assert-ast-nodes select-list-parsed)}]
@@ -287,13 +361,26 @@
 (defn prewalk-ancestry
   "Like clojure.walk/prewalk, but includes hiarchical ancestry."
   [f ancestry form]
-  (walk/walk (partial prewalk-ancestry f (cons form ancestry)) identity (f ancestry form)))
+  (let [new-form (f ancestry form)]
+    (walk/walk (partial prewalk-ancestry f (cons new-form ancestry)) identity new-form)))
 
 (defn node-indent-first-pass
-  [ancestor-nodes ast-node]
-  (let [{:keys [indent own-line?]} (some ast-node? ancestor-nodes)]
+  [ancestor-nodes {current-indent :indent :as ast-node}]
+  (let [{:keys [indent absolute-indent own-line?]}
+        (->> ancestor-nodes
+             (filter #(and (ast-node? %) (contains? % :absolute-indent)))
+             first)]
+    (println :fp-ancestor indent own-line? :fp (:type ast-node) (cts/emit-string ast-node)
+       :adding
+       [
+          :a absolute-indent
+          :c current-indent
+          :r (relative-indent ancestor-nodes ast-node)])
     (-> ast-node
-        (assoc :indent    (+ indent (relative-indent ancestor-nodes ast-node)))
+        (assoc :absolute-indent
+          (+ absolute-indent
+             current-indent
+             (relative-indent ancestor-nodes ast-node)))
         (update :own-line? #(or % (node-own-line? ancestor-nodes ast-node)))
         insert-newline-after-commas-etc)))
 
@@ -319,7 +406,11 @@
     [x]
     (if-not (ast-node? x)
       x
-      (let [{:keys [indent own-line? type keyword]} x]
+      (let [{:keys [absolute-indent indent own-line? type keyword]} x]
+        ; (println :x (str \" (cts/emit-string (dissoc x :leading-whitespace)) \")
+        ;   :kw  (some? keyword)
+        ;   :ccl (contains? cts/ccl-keywords keyword)
+        ;   :sl? (not own-line?))
         (cond-> x
           (not (some? indent))
           (dissoc :indent)
@@ -333,8 +424,8 @@
           (= type :field-definition)
           remove-leading-whitespace-in-first-node
 
-          (and own-line? (some? indent))
-          (assoc :leading-whitespace (string/join (cons nl-ws (repeat indent indent-ws)))))))))
+          (and own-line? (some? absolute-indent))
+          (assoc :leading-whitespace (string/join (cons nl-ws (repeat absolute-indent indent-ws)))))))))
 
 
 (defn reflow
@@ -343,3 +434,11 @@
        (prewalk-ancestry indention-walker-first-pass '())
        (walk/postwalk indention-walker-second-pass)
        (walk/prewalk (ws-walker "  " "\r\n"))))
+
+(defn ^:export tokenizeAndReflow
+  [ccl]
+  (-> ccl
+      string/trim
+      tokenize-and-parse
+      reflow
+      cts/emit-string))

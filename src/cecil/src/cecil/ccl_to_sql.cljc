@@ -227,7 +227,7 @@
    :and
    :or
    :in
-   :count
+   ; :count
    :where
    :plan
    :join

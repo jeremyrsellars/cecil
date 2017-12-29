@@ -25,7 +25,8 @@
               (let [[actual remaining]   (r/tokenize-and-parse (string/trim ccl))
                     actual               (-> actual r/reflow)
                     actual-sql-lines     (-> actual cts/emit-string sql-lines)
-                    [missing extra same] (diff (cons "" expected-lines) actual-sql-lines)]
+                    [missing extra same] (diff (drop-while string/blank? expected-lines)
+                                               (drop-while string/blank? actual-sql-lines))]
                 (testing ccl
                   (when (seq remaining)
                     (is (empty? remaining)
@@ -42,9 +43,11 @@
                      "Extra in actual"))
                   (is (= (cons "" expected-lines) actual-sql-lines)
                    "The lines are the same")
+
                   (when (or missing extra)
                     (is (nil? actual)
                       "Show actual reflowed")))))]
+
                   ; (is (nil?
                   ;        (cts/emit-string actual))
                   ;   (cts/emit-string actual)))))]
@@ -78,4 +81,53 @@
          "  cat.cat_id,"
          "  ITEM_PRIMARY=uar_get_code_display(cat.cat_id)"
          "from"
-         "  feline cat"])))
+         "  feline cat"])
+
+     (test-reflow
+        "select distinct sir.item_id, ocs.cat_id, ITEM_PRIMARY = uar_get_code_display(ocir.cat_id), sir.synonym_id, SYN_PRIMARY = uar_get_code_display(ocs.cat_id), ocs.mnemonic, MNEMONIC_TYPE_ID = uar_get_code_display(ocs.mnemonic_type_id), ITEM_DESC = mi.value from order_cat_item_r ocir, synonym_item_r sir, order_cat_synonym ocs, med_identifier mi plan sir where sir.item_id not in ( select ocir.item_id   from order_cat_item_r ocir   group by ocir.item_id   having count(ocir.cat_id) > 1 ) join ocir   where ocir.item_id = sir.item_id join ocs   where ocs.synonym_id = sir.synonym_id   and ocs.cat_id != ocir.cat_id join mi   where mi.item_id = outerjoin(ocir.item_id)   and mi.med_product_id = outerjoin(0)   and mi.primary_ind = outerjoin(1)   and mi.med_identifier_type_id = outerjoin(value(uar_get_code_by(\"MEANING\",11000,\"DESC\"))) order by sir.item_id"
+        ["select distinct"
+         "  sir.item_id,"
+         "  ocs.cat_id,"
+         "  ITEM_PRIMARY = uar_get_code_display(ocir.cat_id),"
+         "  sir.synonym_id,"
+         "  SYN_PRIMARY = uar_get_code_display(ocs.cat_id),"
+         "  ocs.mnemonic,"
+         "  MNEMONIC_TYPE_ID = uar_get_code_display(ocs.mnemonic_type_id),"
+         "  ITEM_DESC = mi.value"
+         "from"
+         "  order_cat_item_r ocir,"
+         "  synonym_item_r sir,"
+         "  order_cat_synonym ocs,"
+         "  med_identifier mi"
+         "plan"
+         "  sir"
+         "where"
+         "  sir.item_id not in"
+         "      ("
+         "      select"
+         "        ocir.item_id"
+         "      from"
+         "        order_cat_item_r ocir"
+         "      group by"
+         "        ocir.item_id"
+         "      having"
+         "        count(ocir.cat_id) > 1 )"
+         "join"
+         "  ocir"
+         "where"
+         "  ocir.item_id = sir.item_id"
+         "join"
+         "  ocs"
+         "where"
+         "  ocs.synonym_id = sir.synonym_id"
+         "  and ocs.cat_id != ocir.cat_id"
+         "join"
+         "  mi"
+         "where"
+         "  mi.item_id = outerjoin(ocir.item_id)"
+         "  and mi.med_product_id = outerjoin(0)"
+         "  and mi.primary_ind = outerjoin(1)"
+         "  and mi.med_identifier_type_id = outerjoin(value(uar_get_code_by(\"MEANING\",11000,\"DESC\")))"
+         "order by"
+         "  sir.item_id"])))
+
