@@ -11,7 +11,6 @@
                                      assert-ast-nodes-and-tokens
                                      assert-ast-nodes
                                      canonical-keyword
-                                     next-token
                                      token-of-type?]]
    [cecil.util :as util]))
 
@@ -28,6 +27,16 @@
       (let [{:keys [type sub-type nodes]} ast-node]
           (and (= sub-type :parenthetical)
                (= type :expression))))))
+
+
+(defn next-token
+  [[t1 & rst :as tokens]]
+  (let [ws? (cts/valid-string? :whitespace t1)]
+    (if ws?
+      (update-in (next-token rst) [0 :leading-whitespace] #(str t1 %)) ; remember, next-token is [t rest]
+      [(cts/string->token t1)
+       (vec rst)])))
+
 
 (defn minimal-whitespace
   [s]
