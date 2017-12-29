@@ -13,23 +13,31 @@
 
 (defn app
   []
-  [:div
-   [:h3 "CeCiL performs pattern-based transformations from CCL to Oracle SQL."]
-   [:h4 "Supported CCL Functions."]
-   [:ol {:key "shallow"}
-    (map #(vector :li (string/upper-case %))
-      (cts/about-regexes))]
-   "It also uses a CKI when available."
-   [:h4 "Supported deep transformations:"]
-   [:ol {:key "deep"}
-    (map-indexed #(vector :li {:key %1} (str %2))
-      (cts/about-translations))]
-   [:div {:key "usage"}
-     [:h3 "Usage"]
-     [:ol {:key "ol"}
-      (map-indexed #(vector :li {:key %1} %2)
-        ["Paste your CCL."
-         "Click Translate."])]]])
+ [:div {:class "container"}
+   ""
+   [:div {:class "row"}
+      [:div {:key "usage"
+              :class "col-md-4 vtop"}
+        [:h2 "Usage"]
+        [:ol {:key "ol"}
+         (map-indexed #(vector :li {:key %1} %2)
+           ["Paste your CCL."
+            "Click Reflow to adjust whitespace for your CCL and SQL"
+            "Click Translate to start the process of converting from CCL to SQL"])]]
+      [:div {:key "shallow"
+             :class "col-md-4 vtop"}
+        [:h2 "Supported CCL Functions."]
+        [:ol {:key "shallow"}
+         (map #(vector :li (string/upper-case %))
+           (cts/about-regexes))]
+        "It also uses a CKI when available."]
+      [:div {:key "deep"
+             :class "col-md-4 vtop"}
+        [:h2 "Supported deep transformations:"]
+        [:ol {:key "deep"}
+          (map-indexed #(vector :li {:key %1} (str %2))
+            (cts/about-translations))]]]])
+
 
 (defn main []
   ;; conditionally start the app based on whether the #main-app-area

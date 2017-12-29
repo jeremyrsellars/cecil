@@ -944,7 +944,7 @@
 (defn ccl->sql-and-report
   [ccl]
   (let [x-atom (atom {})
-        verbose? true
+        verbose? false
         report
         (with-out-str
           (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
