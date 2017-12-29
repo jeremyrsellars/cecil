@@ -1,5 +1,6 @@
 (ns cecil.reflow
   (:require
+   [clojure.set :as set]
    [clojure.string :as string]
    [clojure.spec.alpha :as s]
    [clojure.pprint :as pprint]
@@ -13,6 +14,8 @@
                                      next-token
                                      token-of-type?]]
    [cecil.util :as util]))
+
+(def ^:dynamic *break-parenthetical-length* 60)
 
 (defn ast-node?
   [x]
@@ -91,12 +94,6 @@
   [ancestor-nodes ast-node]
   (or
     (when-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
-      (println
-        :relative-indent
-        :at ancester-type
-        :not-fi (not= ancester-type :function-invocation)
-        :paren (is-parenthetical-expression? ast-node)
-        :sql (cts/emit-string ancestor))
       (cond
         (and (not= ancester-type :function-invocation)
              (is-parenthetical-expression? ast-node))
@@ -300,7 +297,7 @@
           lazy-should-break-on-commas
           (delay (or (not= :expression type)
                      (not= :parenthetical sub-type)
-                     (<= 60 (count (cts/emit-string ast-node)))))]
+                     (<= *break-parenthetical-length* (count (cts/emit-string ast-node)))))]
       (assoc ast-node
         :nodes
         (into []
@@ -370,12 +367,6 @@
         (->> ancestor-nodes
              (filter #(and (ast-node? %) (contains? % :absolute-indent)))
              first)]
-    (println :fp-ancestor indent own-line? :fp (:type ast-node) (cts/emit-string ast-node)
-       :adding
-       [
-          :a absolute-indent
-          :c current-indent
-          :r (relative-indent ancestor-nodes ast-node)])
     (-> ast-node
         (assoc :absolute-indent
           (+ absolute-indent
@@ -429,16 +420,34 @@
 
 
 (defn reflow
-  [ast-node]
-  (->> ast-node
-       (prewalk-ancestry indention-walker-first-pass '())
-       (walk/postwalk indention-walker-second-pass)
-       (walk/prewalk (ws-walker "  " "\r\n"))))
+  [ast-node options]
+  (binding [*break-parenthetical-length*
+            (get options :break-parenthetical-length *break-parenthetical-length*)]
+    (->> ast-node
+         (prewalk-ancestry indention-walker-first-pass '())
+         (walk/postwalk indention-walker-second-pass)
+         (walk/prewalk
+          (ws-walker
+            (get options :indent "  ")
+            (get options :new-line "\r\n"))))))
 
-(defn ^:export tokenizeAndReflow
-  [ccl]
+(defn tokenize-and-reflow
+  [ccl options]
   (-> ccl
       string/trim
       tokenize-and-parse
-      reflow
+      (reflow options)
       cts/emit-string))
+
+(def option-keys
+ [:indent
+  :new-line
+  :break-parenthetical-length])
+
+#?(:cljs
+    (defn ^:export tokenizeAndReflow
+      [ccl jsObj_options]
+      (let [options (set/rename
+                      (js->clj jsObj_options)
+                      (zipmap (map name option-keys) option-keys))]
+        (tokenize-and-reflow (str ccl) options))))

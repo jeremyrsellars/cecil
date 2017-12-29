@@ -23,7 +23,7 @@
            (test-reflow
               [ccl expected-lines]
               (let [[actual remaining]   (r/tokenize-and-parse (string/trim ccl))
-                    actual               (-> actual r/reflow)
+                    actual               (r/reflow actual {})
                     actual-sql-lines     (-> actual cts/emit-string sql-lines)
                     [missing extra same] (diff (drop-while string/blank? expected-lines)
                                                (drop-while string/blank? actual-sql-lines))]
