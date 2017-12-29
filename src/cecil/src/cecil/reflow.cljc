@@ -14,6 +14,34 @@
                                      token-of-type?]]
    [cecil.util :as util]))
 
+(defn ast-node?
+  [x]
+  (and (map? x) (contains? x :type)))
+
+(defn minimal-whitespace
+  [s]
+  (cond
+    (nil? s)     nil
+    (empty? s)   ""
+    (string? s)  (string/replace s #"\s+" " ")))
+
+(defn with-minimal-whitespace
+  [{ws :leading-whitespace :as ast-node}]
+  (if (empty? ws)
+    (dissoc ast-node :leading-whitespace)
+    (assoc ast-node :leading-whitespace (minimal-whitespace ws))))
+
+(defn remove-leading-whitespace-in-first-node
+  "Traverses the ast-node tree and removes all leading-whitespace on the path to the first leaf."
+  [{:keys [nodes] :as ast-node}]
+  (println :rlwifn ast-node)
+  (cond-> ast-node
+    true
+    (dissoc :leading-whitespace)
+
+    (ast-node? (first nodes))
+    (update-in [:nodes 0] remove-leading-whitespace-in-first-node)))
+
 
 (def top-level-keywords
  #{:select
@@ -46,7 +74,7 @@
 
 (defmethod node-own-line? :expression
   [_ {:keys [type keyword] :as token}]
-  true)
+  false)
 
 (defmethod node-own-line? :whitespace
   [_ {:keys [type keyword] :as token}]
@@ -174,8 +202,7 @@
    (assert-ast-node-and-tokens
     (parse-field-definition
       [{:type :field-definition
-        :nodes [(assert-ast-node expression)]
-        :expression expression}]
+        :nodes [(assert-ast-node expression)]}]
       rst))))
 
  ([field-definitions tokens]
@@ -183,11 +210,9 @@
    (assert-ast-node-and-tokens
       (if (token-of-type? nt :equals)
         (let [[part2 remaining2] (parse-field-definition remaining)
-              {:keys [nodes], alias :expression} (first field-definitions)]
+              {:keys [nodes]} (first field-definitions)]
           [{:type :field-definition
-            :nodes (assert-ast-nodes (into (conj nodes nt) (get part2 :nodes)))
-            :alias alias
-            :expression (get part2 :expression)}
+            :nodes (assert-ast-nodes (into (conj nodes nt) (get part2 :nodes)))}
            remaining2])
         [(first (assert-ast-nodes field-definitions)) tokens])))))
 
@@ -207,6 +232,29 @@
             remaining2))
         [field-definitions tokens])))))
 
+(defn insert-newline-after-commas-etc
+  [{:keys [nodes] :as ast-node}]
+  (if (< (count nodes) 2)
+    ast-node
+    (assoc ast-node
+      :nodes
+      (into []
+        (cons (first nodes)
+          (map
+            (fn [{prev-indent :indent, prev-keyword :keyword :as prev-node} {:keys [indent] :as node}]
+              (let [{:keys [own-line?] :as new-node}
+                    (cond-> node
+                      (token-of-type? prev-node :comma)
+                      (assoc :own-line? true)
+
+                      (and (not= indent prev-indent) (not= prev-keyword :select))
+                      (assoc :own-line? true))]
+                (cond-> new-node
+                  own-line?
+                  remove-leading-whitespace-in-first-node)))
+            nodes
+            (rest nodes)))))))
+
 (defn parse-select
   [tokens]
   (let [[kw tokens] (next-token tokens)
@@ -216,7 +264,7 @@
                               [nil tokens]))
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
-        from next-expression
+        from-etc next-expression
         select-list
         {:type :select-list
          :nodes (assert-ast-nodes select-list-parsed)}]
@@ -227,7 +275,7 @@
                  [kw
                   distinct
                   select-list
-                  (assert-ast-node from)]))}
+                  (assert-ast-node from-etc)]))}
       remaining])))
 
 (defn tokenize-and-parse
@@ -241,23 +289,28 @@
   [f ancestry form]
   (walk/walk (partial prewalk-ancestry f (cons form ancestry)) identity (f ancestry form)))
 
-(defn ast-node?
-  [x]
-  (and (map? x) (contains? x :type)))
-
-(defn node-indent
+(defn node-indent-first-pass
   [ancestor-nodes ast-node]
-  (let [{:keys [indent]} (some ast-node? ancestor-nodes)]
-    (assoc ast-node
-      :indent    (+ indent (relative-indent ancestor-nodes ast-node))
-      :own-line? (node-own-line? ancestor-nodes ast-node))))
+  (let [{:keys [indent own-line?]} (some ast-node? ancestor-nodes)]
+    (-> ast-node
+        (assoc :indent    (+ indent (relative-indent ancestor-nodes ast-node)))
+        (update :own-line? #(or % (node-own-line? ancestor-nodes ast-node)))
+        insert-newline-after-commas-etc)))
 
-
-
-(defn indention-walker
+(defn indention-walker-first-pass
   [ancestor-nodes x]
   (if (ast-node? x)
-    (node-indent ancestor-nodes x)
+    (node-indent-first-pass ancestor-nodes x)
+    x))
+
+(defn node-indent-second-pass
+  [ast-node]
+  (insert-newline-after-commas-etc ast-node))
+
+(defn indention-walker-second-pass
+  [x]
+  (if (ast-node? x)
+    (node-indent-second-pass x)
     x))
 
 (defn ws-walker
@@ -266,11 +319,19 @@
     [x]
     (if-not (ast-node? x)
       x
-      (let [{:keys [indent own-line?]} x]
-        ;(println :x \" (string/join (cons nl-ws (repeat indent indent-ws))) \")
+      (let [{:keys [indent own-line? type keyword]} x]
         (cond-> x
-          ; true
-          ; (dissoc :indent :own-line?)
+          (not (some? indent))
+          (dissoc :indent)
+
+          (not own-line?)
+          (dissoc :own-line?)
+
+          true
+          with-minimal-whitespace
+
+          (= type :field-definition)
+          remove-leading-whitespace-in-first-node
 
           (and own-line? (some? indent))
           (assoc :leading-whitespace (string/join (cons nl-ws (repeat indent indent-ws)))))))))
@@ -279,8 +340,6 @@
 (defn reflow
   [ast-node]
   (->> ast-node
-       (prewalk-ancestry indention-walker '())
+       (prewalk-ancestry indention-walker-first-pass '())
+       (walk/postwalk indention-walker-second-pass)
        (walk/prewalk (ws-walker "  " "\r\n"))))
-
-; (prewalk-ancestry #(do (println (:type (first %1))) %2) '() ex)
-
