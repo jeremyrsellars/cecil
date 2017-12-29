@@ -41,7 +41,7 @@
                   (when extra
                     (is (nil? extra)
                      "Extra in actual"))
-                  (is (= (cons "" expected-lines) actual-sql-lines)
+                  (is (= expected-lines actual-sql-lines)
                    "The lines are the same")
 
                   (when (or missing extra)
@@ -103,8 +103,7 @@
          "  sir"
          "where"
          "  sir.item_id not in"
-         "      ("
-         "      select"
+         "      (select"
          "        ocir.item_id"
          "      from"
          "        order_cat_item_r ocir"

@@ -104,6 +104,10 @@
 
     0))
 
+(defmethod node-own-line? :lparen
+  [_ _]
+  false)
+
 (defmethod relative-indent :field-conjunction
   [_ _]
   1)
@@ -126,10 +130,13 @@
 
 (defmethod node-own-line? :keyword
   [ancestor-nodes {:keys [keyword] :as ast-node}]
-  (or
-    (contains? top-level-keywords keyword)
-    (= keyword :and)
-    (= keyword :or)))
+  (case keyword
+    :select             false
+
+    :and                true
+    :or                 true
+
+    (contains? top-level-keywords keyword)))
 
 
 (defmethod relative-indent :keyword
@@ -144,6 +151,10 @@
         0
         0)
       nil)))
+
+(defmethod node-own-line? :select ; = :type
+  [_ _]
+  false)
 
 (defmethod node-own-line? :whitespace
   [_ {:keys [type keyword] :as ast-node}]
@@ -343,7 +354,7 @@
      [{:type :select
        :nodes (into []
                 (filter some?
-                 [kw
+                 [(remove-leading-whitespace-in-first-node kw)
                   distinct
                   select-list
                   (assert-ast-node from-etc)]))}
