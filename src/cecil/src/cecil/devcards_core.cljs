@@ -10,6 +10,7 @@
    [cecil.ccl-to-sql :as cts]
    [cecil.ccl-to-sql-test]
    [cecil.cki-test]
+   [cecil.reflow-test]
    [cecil.util-test]
    [cecil.core :as cecil])
   (:require-macros
