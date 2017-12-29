@@ -585,7 +585,7 @@
         clause-start-nodes
           [(assoc kw :nodes [replacement-keyword])
            (assoc table-def :leading-whitespace " ")
-           alias-kw]]
+           (assoc alias-kw :leading-whitespace " ")]]
    (assert-ast-node
     {:type expr-type
      :nodes (case expr-type
