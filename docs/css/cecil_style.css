@@ -11,15 +11,20 @@ body{
 
 body::after {
     content: "";
-    background-image: url(https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg/1920px-Cecil_the_lion_at_Hwange_National_Park_%284516560206%29.jpg);
+    background-image: url(https://jeremyrsellars.github.io/cecil/img/lion-pixels.png);
     background-size: cover;
-    opacity: 0.15;
+    background-position-y: 45%;
+    background-position-x: 75%;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    opacity: 0.1;
     top: 0;
     left: 0;
     bottom: 0;
     right: 0;
     position: absolute;
     z-index: -1;
+    height: 200%;
 }
 
 
@@ -34,6 +39,18 @@ body::after {
 textarea
 {
     background-color: transparent;
+}
+
+#main-app-area > *
+{
+    background-color: rgb(255,255,255);
+    background-color: rgba(255,255,255,0.5);
+}
+
+.vcenter {
+    display: inline-block;
+    vertical-align: middle;
+    float: none;
 }
 
 .calculated .CodeMirror {

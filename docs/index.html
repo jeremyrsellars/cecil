@@ -28,21 +28,34 @@
     -->
   </head>
   <body>
-    <div>
-        <img src='./img/lion-pixels.png' width="340" height="431" style="float: right; margin: 1em;" />
-        <h1>CeCiL - Taming the Famous Lion</h1>
-        <div id="main-app-area"></div>
+    <div class="container">
+        <div class="jumbotron">
+            <img src='./img/lion-pixels.png' width="340" height="431" style="float: right; margin: 1em;" />
+            <h1>CeCiL - CCL Power Tools</h1>
+            <p>
+                <h3>CeCiL performs pattern-based transformations from CCL to Oracle SQL.</h3>
+
+                <h4>Pre-release software.  Use at your own risk. <span class = "label label-warning">Beta</span></h4>
+                <a class="btn btn-primary btn-lg" href="#translate" role="button">Try It! »</a>
+            </p>
+        </div>
+    </div>
+    <div id="main-app-area"></div>
+    <div id='app'>
+        
         <script src="./js/compiled/cecil.js" type="text/javascript"></script>
         <style>
             #com-rigsomelight-devcards-main {display: none;}
         </style>
         <script src="./js/compiled/cecil_devcards.js" type="text/javascript"></script>
-        <button onclick="semiAutomate();" accesskey="t"><U>T</U>ranslate</button>
+        <a id='translate' href="#translate"></a>
+        <a class="btn btn-primary btn-lg" onclick="semiAutomate();" accesskey="t"><U>T</U>ranslate</a>
     </div>
     <div class='tile'>
         <a id='ccl' href="#ccl">
             <h3>CCL</h3>
         </a>
+        <a class="btn btn-default" onclick="reflow('ccl');" accesskey="c">Reflow <U>C</U>CL</a>
         <div id='ccl-cm-container'></div>
         <textarea id='cclArea' rows=40 cols=100>
   select distinct    ; single-line comment;
@@ -89,7 +102,7 @@
         <a id='sql' href="#sql">
             <h3>Oracle SQL</h3>
         </a>
-
+        <a class="btn btn-default" onclick="reflow('sql');" accesskey="s">Reflow <U>S</U>QL</a>
         <div id='sql-cm-container' class='calculated'></div>
     </div>
     <div>
@@ -102,13 +115,31 @@
                 lineNumbers: true,
                 // lineWrapping: true,
                 matchBrackets: true,
-                indentUnit: 4,
+                indentUnit: 2,
                 mode: "text/x-plsql",
                 value: "select 'CCL goes here' from dual"
             };
         var cclCM = CodeMirror(document.getElementById('ccl-cm-container'), cmData)
         var sqlCM = CodeMirror(document.getElementById('sql-cm-container'), cmData)
         var reportCM = CodeMirror(document.getElementById('report-cm-container'), cmData)
+
+        var cmById = {
+            'ccl':cclCM,
+            'sql':sqlCM}
+
+        var reflow = function reflow(id){
+            var sqlOrError = ""
+            var cm = cmById[id]
+            var before = cm.getValue("\r\n")
+            var report = ""
+            try {
+                var after = cecil.reflow.tokenizeAndReflow(before, {}).trim()
+                cm.setValue(after);
+            } catch (e) {
+                console.error(e)
+                reportCM.setValue(e.toString())
+            }
+        }
 
         var semiAutomate = function semiAutomate(){
             var sqlOrError = ""
