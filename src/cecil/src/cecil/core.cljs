@@ -7,6 +7,7 @@
    [cecil.cki :as cki]
    [cecil.util :as util]
    [cecil.ccl-to-sql :as cts]
+   [cecil.reflow]
    [cljsjs.react.dom]))
 
 (enable-console-print!)
