@@ -1031,6 +1031,7 @@
       (map str translations)
      :cljs
      (-> ["Change strings like `x = \"abc*\"` to  `x like 'abc%'`."
+          "Change `= null` like `x = null` to  `x is null`."
           "Changes field aliases from `ALIAS=x.field` to `x.field AS ALIAS`."
           "Changes from `\"a\"` to `'a'`."]
          ;(into (map #(string/replace (.-name %) #".+\$" "") translations))
