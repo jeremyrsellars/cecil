@@ -28,22 +28,45 @@
           (and (= sub-type :parenthetical)
                (= type :expression))))))
 
+(defn valid-whitespace-or-comment?
+  [s]
+  (or (cts/valid-string? :whitespace s)
+      (cts/valid-string? :comment s)))
+
+(defn split-ts
+  "Gets the next whitespace and comment tokens as with clojure.core/split-with."
+  [tokens]
+  (split-with valid-whitespace-or-comment? tokens))
 
 (defn next-token
-  [[t1 & rst :as tokens]]
-  (let [ws? (cts/valid-string? :whitespace t1)]
-    (if ws?
-      (update-in (next-token rst) [0 :leading-whitespace] #(str t1 %)) ; remember, next-token is [t rest]
-      [(cts/string->token t1)
-       (vec rst)])))
+  "Gets the next non-whitespace, non-comment token,
+  combining leading whitespace and comments into the :leading-whitespace.
+  trailing comments"
+  [tokens]
+  (let [[leading-tokens [t & rst]] (split-ts tokens)
+        [following-ws-tokens rst2] (split-ts rst)
+        following-ws-tokens (vec following-ws-tokens)
+        last-following-ws-tokens (last following-ws-tokens)
+        [following-comment-tokens rst] (if (and (> (count following-ws-tokens) 1)
+                                                (cts/valid-string? :whitespace last-following-ws-tokens))
+                                          [(subvec following-ws-tokens 0 (- (count following-ws-tokens) 1))
+                                           (cons last-following-ws-tokens rst2)]
+                                          [[]
+                                           rst])]
+    [(cond-> (cts/string->token t)
+        (seq leading-tokens)
+        (assoc :leading-whitespace (string/join leading-tokens))
 
+        (seq following-comment-tokens)
+        (assoc :following-comment (string/join following-comment-tokens)))
+     (vec rst)]))
 
 (defn minimal-whitespace
   [s]
   (cond
     (nil? s)     nil
     (empty? s)   ""
-    (string? s)  (string/replace s #"\s+" " ")))
+    (string? s)  (string/replace s #"[ \t]+" " ")))
 
 (defn with-minimal-whitespace
   [{ws :leading-whitespace :as ast-node}]
@@ -51,15 +74,28 @@
     (dissoc ast-node :leading-whitespace)
     (assoc ast-node :leading-whitespace (minimal-whitespace ws))))
 
+(defn remove-leading-and-trailing-whitespace-from-string
+  [s]
+  (let [trimmed (string/replace s #"(?m)^(?:(?![\r\n])\s)+|(?:(?![\r\n])\s)+$" "")
+        x
+        (when-not (string/blank? trimmed)
+          trimmed)]
+    (println (str \' x \'))
+    x))
+
 (defn remove-leading-whitespace-in-first-node
   "Traverses the ast-node tree and removes all leading-whitespace on the path to the first leaf."
-  [{:keys [nodes] :as ast-node}]
-  (cond-> ast-node
-    true
-    (dissoc :leading-whitespace)
+  [{:keys [nodes leading-whitespace] :as ast-node}]
+  (let [is-blank (string/blank? leading-whitespace)]
+    (cond-> ast-node
+      is-blank
+      (dissoc :leading-whitespace)
 
-    (ast-node? (first nodes))
-    (update-in [:nodes 0] remove-leading-whitespace-in-first-node)))
+      (not is-blank)
+      (update :leading-whitespace remove-leading-and-trailing-whitespace-from-string)
+
+      (ast-node? (first nodes))
+      (update-in [:nodes 0] remove-leading-whitespace-in-first-node))))
 
 
 (def top-level-keywords
