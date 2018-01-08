@@ -1,0 +1,7 @@
+select
+  sir.item_id
+from
+  synonym_item_r sir
+plan sir
+where sir.item_id = null
+  or sir.item_id != null

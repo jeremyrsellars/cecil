@@ -189,8 +189,9 @@
 (s/def ::token string?)
 (s/def ::tokens (s/coll-of ::token :into []))
 (s/def ::leading-whitespace (s/nilable string?))
+(s/def ::following-comment (s/nilable string?))
 (s/def ::ast-node (s/keys :req-un [::type ::nodes]
-                          :opt-un [::expression ::leading-whitespace]))
+                          :opt-un [::expression ::leading-whitespace ::following-comment]))
 (s/def ::ast-node-or-token (s/or :node ::ast-node :token ::token))
 (s/def ::expression ::ast-node)
 (s/def ::ast-nodes (s/coll-of ::ast-node
@@ -227,6 +228,8 @@
    :and
    :or
    :in
+   :is
+   :null
    ; :count
    :where
    :plan
@@ -355,14 +358,38 @@
 (declare parse-select)
 (declare parse-expression)
 
+(defn valid-whitespace-or-comment?
+  [s]
+  (or (valid-string? :whitespace s)
+      (valid-string? :comment s)))
+
+(defn split-ts
+  "Gets the next whitespace and comment tokens as with clojure.core/split-with."
+  [tokens]
+  (split-with valid-whitespace-or-comment? tokens))
+
 (defn next-token
-  [[t1 & rst :as tokens]]
-  (let [ws? (or (valid-string? :whitespace t1)
-                (valid-string? :comment t1))]
-    (if ws?
-      (update-in (next-token rst) [0 :leading-whitespace] #(str t1 %)) ; remember, next-token is [t rest]
-      [(string->token t1)
-       (vec rst)])))
+  "Gets the next non-whitespace, non-comment token,
+  combining leading whitespace and comments into the :leading-whitespace.
+  trailing comments"
+  [tokens]
+  (let [[leading-tokens [t & rst]] (split-ts tokens)
+        [following-ws-tokens rst2] (split-ts rst)
+        following-ws-tokens (vec following-ws-tokens)
+        last-following-ws-tokens (last following-ws-tokens)
+        [following-comment-tokens rst] (if (and (> (count following-ws-tokens) 1)
+                                                (valid-string? :whitespace last-following-ws-tokens))
+                                          [(subvec following-ws-tokens 0 (- (count following-ws-tokens) 1))
+                                           (cons last-following-ws-tokens rst2)]
+                                          [[]
+                                           rst])]
+    [(cond-> (string->token t)
+        (seq leading-tokens)
+        (assoc :leading-whitespace (string/join leading-tokens))
+
+        (seq following-comment-tokens)
+        (assoc :following-comment (string/join following-comment-tokens)))
+     (vec rst)]))
 
 (defn next-whitespaces-and-comments-as-string
   [tokens]
@@ -677,7 +704,8 @@
     (parse-select tokens))))
 
 (letfn [(emit-leading-whitespace-and-tokens [x]
-          (cond (map? x)          [(:leading-whitespace x) (:nodes x)]
+          (cond (map? x)          (let [{:keys [leading-whitespace nodes following-comment]} x]
+                                    [leading-whitespace nodes following-comment])
                 (string? x)       x
                 (sequential? x)   x
                 (nil? x)          nil
@@ -808,6 +836,10 @@
         (fn [{:keys [type] :as expr}]
           (or (= type :equals)
               (= type :not-equals)))
+      null-keyword?
+        (fn [{:keys [type keyword] :as expr}]
+          (and (= type :keyword)
+               (= keyword :null)))
       like-substitutions
       {:equals
        {:type :keyword
@@ -819,10 +851,25 @@
         :keyword :not-like
         :leading-whitespace " "
         :nodes ["not like"]}}
-      replace-equals
-      (fn replace-equals
+      is-substitutions
+      {:equals
+       {:type :keyword
+        :keyword :is
+        :leading-whitespace " "
+        :nodes ["is"]}
+       :not-equals
+       {:type :keyword
+        :keyword :is-not
+        :leading-whitespace " "
+        :nodes ["is not"]}}
+      replace-equals-like
+      (fn replace-equals-like
         [{:keys [type] :as n}]
         (get like-substitutions type n))
+      replace-equals-is
+      (fn replace-equals-is
+        [{:keys [type] :as n}]
+        (get is-substitutions type n))
       replace-str
       (fn replace-str
         [expr]
@@ -837,12 +884,13 @@
                      range
                      (filter #(and (->> %     (nth nodes) equals-expression?)
                                    (->> % inc (nth nodes) wildcard-string-expression?))))
+
                 translated-nodes
                 (reduce
                   (fn [nodes equals-idx]
                     (let [str-idx (inc equals-idx)]
                       (-> (into [] nodes)
-                          (update equals-idx replace-equals)
+                          (update equals-idx replace-equals-like)
                           (update str-idx replace-str))))
                   nodes
                   translate-indexes)
@@ -865,13 +913,59 @@
           (if (and (map? x)
                    (filter-expression? x))
             (walk/prewalk translate-like-if-node x)
+            x))
+
+         (translate-is
+          [{:keys [nodes] :as filter-expression}]
+          (let [translate-indexes
+                (->> nodes     ; look for :equals :string
+                     count dec ; count - 1 because
+                     range
+                     (filter #(and (->> %     (nth nodes) equals-expression?)
+                                   (->> % inc (nth nodes) null-keyword?))))
+
+                translated-nodes
+                (reduce
+                  (fn [nodes equals-idx]
+                    (let [str-idx (inc equals-idx)]
+                      (-> (into [] nodes)
+                          (update equals-idx replace-equals-is)
+                          (update str-idx replace-str))))
+                  nodes
+                  translate-indexes)
+
+                translated-node
+                (assoc filter-expression :nodes translated-nodes)]
+            (report-change "Translated is" filter-expression translated-node)
+            translated-node))
+
+
+         (translate-is-if-node
+          [x]
+          (if (and (map? x)
+                   (contains? x :type))
+            (translate-is x)
+            x))
+
+         (translate-is-in-filter-expressions
+          [x]
+          (if (and (map? x)
+                   (filter-expression? x))
+            (walk/prewalk translate-is-if-node x)
             x))]
+
 
   (defn translate-equals-to-like
     "Change strings like `x = \"abc*\"` to  `x like 'abc%'`."
     [ast-node-or-nodes]
     (->> ast-node-or-nodes
-         (walk/prewalk translate-like-in-filter-expressions)))))
+         (walk/prewalk translate-like-in-filter-expressions)))
+
+  (defn translate-equals-null-to-is-null
+    "Change strings is `x = \"abc*\"` to  `x is 'abc%'`."
+    [ast-node-or-nodes]
+    (->> ast-node-or-nodes
+         (walk/prewalk translate-is-in-filter-expressions)))))
 
 (defn unwrap-function-invocation
   "Gets the function argument (single argument expression, or arguments as parenthetical-expression)"
@@ -925,6 +1019,7 @@
 
 (def translations
  [translate-equals-to-like
+  translate-equals-null-to-is-null
   translate-field-aliases
   translate-strings
   translate-comments

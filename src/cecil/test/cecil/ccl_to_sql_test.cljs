@@ -39,6 +39,9 @@
 (def example-like-ccl (insert-file-contents-string "resources/example-like/detail.ccl"))
 (def example-like-sql (insert-file-contents-string "resources/example-like/detail.sql"))
 
+(def example-null-ccl (insert-file-contents-string "resources/example-null/detail.ccl"))
+(def example-null-sql (insert-file-contents-string "resources/example-null/detail.sql"))
+
 (def detail-1930-ccl (insert-file-contents-string "resources/1930/detail.ccl"))
 (def detail-1930-sql (insert-file-contents-string "resources/1930/detail.sql"))
 
@@ -499,6 +502,10 @@
       (test-translate-2 "example-like"
         example-like-ccl
         example-like-sql)
+
+      (test-translate-2 "example-null"
+        example-null-ccl
+        example-null-sql)
 
       (test-translate-2 "example-leftjoin"
         example-leftjoin-ccl
