@@ -28,11 +28,21 @@
        ["1" " " "--uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")"])
 
     (is-tokenized-correctly
+       "1 --uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")\r\n2"
+       ["1" " " "--uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")" "\r\n" "2"])
+
+    (is-tokenized-correctly
        "1 /*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"
        ["1" " " "/*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"])
 
     (is-tokenized-correctly-from-tokens
        ["select" " " "1" " " "from" " " "x" " " "group" " " "group by" " " "1" " " "order      by" " " "1"])
+
+    (is-tokenized-correctly-from-tokens
+       ["select" " " "r" "." "*" " " "from" " " "re" " " "r" " " "where" " " "r" "." "r" " " ">" " " "\"\"" " " "order by" " " "r" "." "a" "," " " "r" "." "b"])
+
+    (is-tokenized-correctly-from-tokens
+       ["select" " " "r" "." "*" " " "from" " " "re" " " "r" " " "where" " " "r" "." "r" " " ">" " " "''" " " "order by" " " "r" "." "a" "," " " "r" "." "b"])
 
     (is-tokenized-correctly-from-tokens
        ["select" " " "count" "(" "cv" "." "code_value" ")" " " "from" " " "location" " " "l" "," " " "location_group" " " "lg" " " "plan" " " "l" " " "where" " " "l" "." "location_type_cd" "=" "123" " " "join" " " "lg"])
@@ -59,7 +69,6 @@
     (is-canonicalized-correctly
       "          "
       " ")
-
 
     (is-canonicalized-correctly
       "  \n  1  \n    "

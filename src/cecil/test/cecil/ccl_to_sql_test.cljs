@@ -42,6 +42,9 @@
 (def detail-1930-ccl (insert-file-contents-string "resources/1930/detail.ccl"))
 (def detail-1930-sql (insert-file-contents-string "resources/1930/detail.sql"))
 
+(def detail-issue-1-ccl (insert-file-contents-string "resources/issue-1/detail.ccl"))
+(def detail-issue-1-sql (insert-file-contents-string "resources/issue-1/detail.sql"))
+
 
 (defn canonical=
   [a b]
@@ -504,6 +507,10 @@
       (test-translate-2 "example-innerjoin"
         example-innerjoin-ccl
         example-innerjoin-sql)
+
+      (test-translate-2 "issue-1-detail"
+        detail-issue-1-ccl
+        detail-issue-1-sql)
 
       (test-translate-2 "1930-detail"
         detail-1930-ccl
