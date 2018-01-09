@@ -5,9 +5,15 @@
 #?(:cljs (defn slurp [file-name] "cannot slurp in cljs"))
 #?(:cljs (defn spit [file-name contents] "cannot spit in cljs"))
 
+(def go-regex #"\s*go\s*")
+
+(defn trim-go
+  [s]
+  (string/replace s go-regex "\r\n"))
+
 (defn convert-file!
   [ccl-file sql-file]
-  (let [ccl (slurp ccl-file)
+  (let [ccl (trim-go (slurp ccl-file))
         [sql report] (cts/ccl->sql-and-report ccl)]
     (spit sql-file sql)
     (println report)
