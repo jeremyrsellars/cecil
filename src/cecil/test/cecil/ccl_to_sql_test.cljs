@@ -85,11 +85,11 @@
     ;; CKI
     (is-translated-correctly
       "uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")"
-      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101131' and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")*/)")
+      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101131' and CODE_SET = 4500 and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")*/)")
 
     (is-translated-correctly
       "uar_get_code_by(\"MEANING\",4500,\"LONGTERM\")"
-      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101134' and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"LONGTERM\")*/)")
+      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101134' and CODE_SET = 4500 and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"LONGTERM\")*/)")
 
     ;; No CKI
     (is-translated-correctly

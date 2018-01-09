@@ -18,7 +18,7 @@
     on mi.item_id = ocir.item_id
     and mi.med_product_id = 0
     and mi.primary_ind = 1
-    and mi.med_identifier_type_id = (select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!3290' and ACTIVE_IND = 1 )
+    and mi.med_identifier_type_id = (select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!3290' and CODE_SET = 11000 and ACTIVE_IND = 1 )
   where sir.item_id not in (
     select
       ocir.item_id
