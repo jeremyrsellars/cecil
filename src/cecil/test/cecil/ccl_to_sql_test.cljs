@@ -45,6 +45,9 @@
 (def detail-1930-ccl (insert-file-contents-string "resources/1930/detail.ccl"))
 (def detail-1930-sql (insert-file-contents-string "resources/1930/detail.sql"))
 
+(def detail-uar_get_code_by-display-ccl (insert-file-contents-string "resources/example-uar_get_code_by-display/detail.ccl"))
+(def detail-uar_get_code_by-display-sql (insert-file-contents-string "resources/example-uar_get_code_by-display/detail.sql"))
+
 (def detail-issue-1-ccl (insert-file-contents-string "resources/issue-1/detail.ccl"))
 (def detail-issue-1-sql (insert-file-contents-string "resources/issue-1/detail.sql"))
 
@@ -85,11 +88,7 @@
     ;; CKI
     (is-translated-correctly
       "uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")"
-      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101131' and CODE_SET = 4500 and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")*/)")
-
-    (is-translated-correctly
-      "uar_get_code_by(\"MEANING\",4500,\"LONGTERM\")"
-      "(select CODE_VALUE from CODE_VALUE cv where cv.cki = 'CKI.CODEVALUE!101134' and CODE_SET = 4500 and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"LONGTERM\")*/)")
+      "(select CODE_VALUE from CODE_VALUE where cki = 'CKI.CODEVALUE!101131' and CODE_SET = 4500 and ACTIVE_IND = 1 /*uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")*/)")
 
     ;; No CKI
     (is-translated-correctly
@@ -514,6 +513,10 @@
       (test-translate-2 "example-innerjoin"
         example-innerjoin-ccl
         example-innerjoin-sql)
+
+      (test-translate-2 "detail-uar_get_code_by-display"
+        detail-uar_get_code_by-display-ccl
+        detail-uar_get_code_by-display-sql)
 
       (test-translate-2 "issue-1-detail"
         detail-issue-1-ccl

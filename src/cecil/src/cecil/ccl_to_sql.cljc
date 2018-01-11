@@ -26,12 +26,16 @@
 (def uar_get_code_by-regex
   #"(?i)\buar_get_code_by\s*\(\s*\"([^\"]+)\"\s*,\s*(\d+)\s*,\s*\"([^\"]+)\"\s*\)")
 
+(def uar_get_code_by-field
+  {"MEANING" "CDF_MEANING"})
+
 (defn translate-1-uar_get_code_by
   [ccl]
   (if-let [[_ type code-set k] (re-find uar_get_code_by-regex ccl)]
-    (if-let [cki-str (and (= "MEANING" type) (get-in cki/cki [code-set k]))]
-      (str "(select CODE_VALUE from CODE_VALUE cv where cv.cki = '" cki-str "' and CODE_SET = " code-set " and ACTIVE_IND = 1 /*" ccl "*/)")
-      (str "(select CODE_VALUE from CODE_VALUE where CDF_MEANING = '" k "' and CODE_SET = " code-set " and ACTIVE_IND = 1 /*" ccl "*/)"))
+    (let [field (get uar_get_code_by-field (string/upper-case type) type)]
+      (if-let [cki-str (and (= "MEANING" type) (get-in cki/cki [code-set k]))]
+        (str "(select CODE_VALUE from CODE_VALUE where cki = '" cki-str "' and CODE_SET = " code-set " and ACTIVE_IND = 1 /*" ccl "*/)")
+        (str "(select CODE_VALUE from CODE_VALUE where " field " = '" k "' and CODE_SET = " code-set " and ACTIVE_IND = 1 /*" ccl "*/)")))
     ccl))
 
 (defn translate-uar_get_code_by

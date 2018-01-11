@@ -1,0 +1,4 @@
+select *
+from
+  med_identifier mi
+where mi.med_identifier_type_id = value(uar_get_code_by("DISPLAY",11000,"Described by"))
