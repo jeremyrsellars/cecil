@@ -66,7 +66,8 @@
   (cond
     (nil? s)     nil
     (empty? s)   ""
-    (string? s)  (string/replace s #"[ \t]+" " ")))
+    (string? s)  (string/replace s #"[ \t]+" " ")
+    :default     s))
 
 (defn with-minimal-whitespace
   [{ws :leading-whitespace :as ast-node}]
@@ -80,7 +81,6 @@
         x
         (when-not (string/blank? trimmed)
           trimmed)]
-    (println (str \' x \'))
     x))
 
 (defn remove-leading-whitespace-in-first-node
@@ -453,7 +453,7 @@
     [x]
     (if-not (ast-node? x)
       x
-      (let [{:keys [absolute-indent indent own-line? type keyword]} x]
+      (let [{:keys [absolute-indent indent own-line? type keyword leading-whitespace]} x]
         ; (println :x (str \" (cts/emit-string (dissoc x :leading-whitespace)) \")
         ;   :kw  (some? keyword)
         ;   :ccl (contains? cts/ccl-keywords keyword)
@@ -472,8 +472,7 @@
           remove-leading-whitespace-in-first-node
 
           (and own-line? (some? absolute-indent))
-          (assoc :leading-whitespace (string/join (cons nl-ws (repeat absolute-indent indent-ws)))))))))
-
+          (assoc :leading-whitespace (string/replace (or leading-whitespace "") #"^\s*" (string/join (cons nl-ws (repeat absolute-indent indent-ws))))))))))
 
 (defn reflow
   [ast-node options]

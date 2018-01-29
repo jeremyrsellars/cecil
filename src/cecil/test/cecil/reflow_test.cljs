@@ -96,6 +96,22 @@
         "  r.b"])
 
      (test-reflow
+        "; leading comment
+        select distinct ;trailing comment
+        item_id,
+        /*block
+          comment*/
+        item_id from order_cat_item_r ocir"
+        ["; leading comment"
+         "select distinct ;trailing comment"
+         "  item_id,"
+         "        /*block"
+         "          comment*/"
+         "  item_id"
+         "from"
+         "  order_cat_item_r ocir"])
+
+     (test-reflow
         "-- leading comment
         select distinct --trailing comment
         item_id,
@@ -112,14 +128,17 @@
          "  order_cat_item_r ocir"])
 
      (test-reflow
-        "-- leading comment
-        select distinct --trailing comment
+        "; leading comment
+        select distinct ;trailing comment
         sir.item_id, ocs.cat_id,
         /*block
           comment*/
-        ITEM_PRIMARY = uar_get_code_display(ocir.cat_id), sir.synonym_id, SYN_PRIMARY = uar_get_code_display(ocs.cat_id), ocs.mnemonic, MNEMONIC_TYPE_ID = uar_get_code_display(ocs.mnemonic_type_id), ITEM_DESC = mi.value from order_cat_item_r ocir, synonym_item_r sir, order_cat_synonym ocs, med_identifier mi plan sir where sir.item_id not in ( select ocir.item_id   from order_cat_item_r ocir   group by ocir.item_id   having count(ocir.cat_id) > 1 ) join ocir   where ocir.item_id = sir.item_id join ocs   where ocs.synonym_id = sir.synonym_id   and ocs.cat_id != ocir.cat_id join mi   where mi.item_id = outerjoin(ocir.item_id)   and mi.med_product_id = outerjoin(0)   and mi.primary_ind = outerjoin(1)   and mi.med_identifier_type_id = outerjoin(value(uar_get_code_by(\"MEANING\",11000,\"DESC\"))) order by sir.item_id"
-        ["-- leading comment"
-         "select distinct --trailing comment"
+        ITEM_PRIMARY = uar_get_code_display(ocir.cat_id), sir.synonym_id, SYN_PRIMARY = uar_get_code_display(ocs.cat_id), ocs.mnemonic, MNEMONIC_TYPE_ID = uar_get_code_display(ocs.mnemonic_type_id), ITEM_DESC = mi.value ;trailing comment before from
+        from order_cat_item_r ocir, synonym_item_r sir, order_cat_synonym ocs, med_identifier mi ;trailing comment before plan
+        plan sir ;trailing comment before where
+        where sir.item_id not in ( select ocir.item_id   from order_cat_item_r ocir   group by ocir.item_id   having count(ocir.cat_id) > 1 ) join ocir   where ocir.item_id = sir.item_id join ocs   where ocs.synonym_id = sir.synonym_id   and ocs.cat_id != ocir.cat_id join mi   where mi.item_id = outerjoin(ocir.item_id)   and mi.med_product_id = outerjoin(0)   and mi.primary_ind = outerjoin(1)   and mi.med_identifier_type_id = outerjoin(value(uar_get_code_by(\"MEANING\",11000,\"DESC\"))) order by sir.item_id"
+        ["; leading comment"
+         "select distinct ;trailing comment"
          "  sir.item_id,"
          "  ocs.cat_id,"
          "        /*block"
@@ -129,14 +148,14 @@
          "  SYN_PRIMARY = uar_get_code_display(ocs.cat_id),"
          "  ocs.mnemonic,"
          "  MNEMONIC_TYPE_ID = uar_get_code_display(ocs.mnemonic_type_id),"
-         "  ITEM_DESC = mi.value"
+         "  ITEM_DESC = mi.value ;trailing comment before from"
          "from"
          "  order_cat_item_r ocir,"
          "  synonym_item_r sir,"
          "  order_cat_synonym ocs,"
-         "  med_identifier mi"
+         "  med_identifier mi ;trailing comment before plan"
          "plan"
-         "  sir"
+         "  sir ;trailing comment before where"
          "where"
          "  sir.item_id not in"
          "      (select"
