@@ -29,7 +29,7 @@
 
     (is-tokenized-correctly
        "1 --uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")\r\n2"
-       ["1" " " "--uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")" "\r\n" "2"])
+       ["1" " " "--uar_get_code_by(\"MEANING\",4500,\"INPATIENT\")\r\n" "2"])
 
     (is-tokenized-correctly
        "1 /*uar_get_code_by\r\n(\"MEANING\",4500,\"INPATIENT\")  */"

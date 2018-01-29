@@ -702,10 +702,17 @@
       remaining])))
 
 (defn tokenize-and-parse
-  [ccl]
-  (let [tokens (util/tokenize ccl)]
+ ([ccl] (tokenize-and-parse ccl nil))
+ ([ccl f-tokens]
+  (let [tokens (util/tokenize ccl)
+        tokens (cond-> tokens
+                  (fn? f-tokens) f-tokens)]
    (assert-ast-node-and-tokens
-    (parse-select tokens))))
+    (parse-select tokens)))))
+
+(defn remove-empty-lines
+  [s]
+  (string/replace s #"(\r?\n)(?:\r?\n)+" "$1"))
 
 (letfn [(emit-leading-whitespace-and-tokens [x]
           (cond (map? x)          (let [{:keys [leading-whitespace nodes following-comment]} x]
@@ -725,7 +732,8 @@
     [ast-nodes]
     (->> ast-nodes
          emit-tokens
-         (string/join ""))))
+         (string/join "")
+         remove-empty-lines)))
 
 (let [as {:type :keyword
           :leading-whitespace " "
@@ -1037,9 +1045,14 @@
      (-> ["Change strings like `x = \"abc*\"` to  `x like 'abc%'`."
           "Change `= null` like `x = null` to  `x is null`."
           "Changes field aliases from `ALIAS=x.field` to `x.field AS ALIAS`."
-          "Changes from `\"a\"` to `'a'`."]
+          "Changes from `\"a\"` to `'a'`."
+          "Changes from `; Single-line comment` to `-- Single-line comment`."]
          ;(into (map #(string/replace (.-name %) #".+\$" "") translations))
          (into (map #(str "CCL Function: " (name %)) (keys (dissoc (methods translate-function-invocation) :default)))))))
+
+(defn convert-comment-string
+  [s]
+  (string/replace s #"^;" "--"))
 
 (defn ccl->sql-and-report
   [ccl]
@@ -1047,7 +1060,7 @@
         verbose? false
         report
         (with-out-str
-          (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl)))
+          (let [[ast remaining] (assert-ast-node-and-tokens (tokenize-and-parse (replace-all ccl) (partial map convert-comment-string)))
                 translations (-> (into [assert-ast-node] translations)
                                  (conj assert-ast-node))
                 translated-ast (reduce

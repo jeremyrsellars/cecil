@@ -387,6 +387,31 @@
                   ;  "Show actual-sql")
                   (when-not (and (nil? missing) (nil? extra))
                      (is (nil? (cts/translate-field-aliases (first (cts/tokenize-and-parse (cts/replace-all ccl)))))
+                        "Show actual AST"))))))
+
+           (test-translate-with-comments
+              [test-name ccl expected-sql]
+              (let [[actual-sql _] (cts/ccl->sql-and-report ccl)]
+               (testing test-name
+                (is (= (util/canonical-whitespace expected-sql)
+                       (util/canonical-whitespace actual-sql))
+                  (str ccl
+                       " -> "
+                       expected-sql))
+                (let [[missing extra same]
+                      (diff
+                        (sql-fragments (util/canonical-whitespace expected-sql))
+                        (sql-fragments (util/canonical-whitespace actual-sql)))]
+                  (is (nil? missing)
+                   "Missing from actual")
+                  (is (nil? extra)
+                   "Extra in actual")
+                  ; (is (nil? same)
+                  ;  "Show same")
+                  ; (is (nil? (string/split actual-sql #"\r?\n"))
+                  ;  "Show actual-sql")
+                  (when-not (and (nil? missing) (nil? extra))
+                     (is (nil? (cts/translate-field-aliases (first (cts/tokenize-and-parse (cts/replace-all ccl)))))
                         "Show actual AST"))))))]
 
       (test-parse
@@ -441,7 +466,7 @@
         "select ocir.catalog_cd,ITEM_PRIMARY=uar_get_code_display(ocir.catalog_cd) from order_catalog_item_r ocir"
         "select ocir.catalog_cd,uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY from order_catalog_item_r ocir")
 
-      (test-translate-1 "simple-with-comments"
+      (test-translate-with-comments "simple-with-comments"
         "select /*multi-line
           comment*/
           ocir.catalog_cd, -- sql line comment
@@ -450,8 +475,8 @@
         "select /*multi-line
           comment*/
           ocir.catalog_cd, -- sql line comment
-          ; ccl line comment
-          uar_get_code_display(ocir.catalog_cd) AS ITEM_PRIMARY
+          -- ccl line comment
+          (SELECT DISPLAY FROM CODE_VALUE WHERE CODE_VALUE = ocir.catalog_cd AND ACTIVE_IND = 1 /*uar_get_code_display(ocir.catalog_cd)*/) AS ITEM_PRIMARY
           from order_catalog_item_r ocir")
 
       (test-translate-2 "Simplify zero.  0.0 -> 0"
