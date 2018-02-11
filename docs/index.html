@@ -16,7 +16,7 @@
     <title>CeCiL - CCL Power Tools</title>
     <link href="data:image/x-icon;base64,AAABAAEAEBAQAAAAAAAoAQAAFgAAACgAAAAQAAAAIAAAAAEABAAAAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAjjuEAAAAAAAB60AAB6v8AcQDwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAERERERERERERERERERERERERERERERERERESIgIgERERESAiIiIhERESIjMzMgIRERIjM0MzIhERICMTMxMiEREiIzMzMyARERICMzMyIhEREjMiIiMyERERMiIgIjERERERICIhERERERERERERERERERERERERERERERERERH//wAA//8AAP//AAD4DwAA8AcAAOADAADgAwAAwAMAAMADAADgAwAA4AMAAPAHAAD8HwAA//8AAP//AAD//wAA" rel="icon" type="image/x-icon" />
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-    <link href="./css/cecil_style.css?Rel=20180129_165419" rel="stylesheet" type="text/css">
+    <link href="./css/cecil_style.css?Rel=20180210_215731" rel="stylesheet" type="text/css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.13.2/codemirror.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.13.2/codemirror.css">
     <style>
@@ -43,11 +43,11 @@
     <div id="main-app-area"></div>
     <div id='app'>
         
-        <script src="./js/compiled/cecil.js?Rel=20180129_165419" type="text/javascript"></script>
+        <script src="./js/compiled/cecil.js?Rel=20180210_215731" type="text/javascript"></script>
         <style>
             #com-rigsomelight-devcards-main {display: none;}
         </style>
-        <script src="./js/compiled/cecil_devcards.js?Rel=20180129_165419" type="text/javascript"></script>
+        <script src="./js/compiled/cecil_devcards.js?Rel=20180210_215731" type="text/javascript"></script>
         <a id='translate' href="#translate"></a>
         <a class="btn btn-primary btn-lg" onclick="semiAutomate();" accesskey="t"><U>T</U>ranslate</a>
     </div>
@@ -55,7 +55,8 @@
         <a id='ccl' href="#ccl">
             <h3>CCL</h3>
         </a>
-        <a class="btn btn-default" onclick="reflow('ccl');" accesskey="c">Reflow <U>C</U>CL</a>
+        <a class="btn btn-default" onclick="reflow('ccl', 'reflow');" accesskey="c">Reflow <U>C</U>CL</a>
+        <a class="btn btn-default" onclick="reflow('ccl', 'widen');" accesskey="l">Widen CC<U>L</U></a>
         <div id='ccl-cm-container'></div>
         <textarea id='cclArea' rows=40 cols=100>
   select distinct    ; single-line comment;
@@ -102,7 +103,8 @@
         <a id='sql' href="#sql">
             <h3>Oracle SQL</h3>
         </a>
-        <a class="btn btn-default" onclick="reflow('sql');" accesskey="s">Reflow <U>S</U>QL</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'reflow');" accesskey="s">Reflow <U>S</U>QL</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'widen');" accesskey="q">Widen S<U>Q</U>L</a>
         <div id='sql-cm-container' class='calculated'></div>
     </div>
     <div>
@@ -127,14 +129,17 @@
             'ccl':cclCM,
             'sql':sqlCM}
 
-        var reflow = function reflow(id){
+        var reflow = function reflow(id, mode){
             var sqlOrError = ""
             var cm = cmById[id]
             var before = cm.getValue("\r\n")
             var report = ""
             try {
-                var after = cecil.reflow.tokenizeAndReflow(before, {}).trim()
-                cm.setValue(after);
+                var after =
+                    mode == 'widen' ? cecil.reflow.reflowWide(before)
+                  : mode == 'reflow' ? cecil.reflow.tokenizeAndReflow(before, {})
+                  : below;
+                cm.setValue(after.trim());
             } catch (e) {
                 console.error(e)
                 reportCM.setValue(e.toString())
