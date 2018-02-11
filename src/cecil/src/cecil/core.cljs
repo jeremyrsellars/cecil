@@ -23,7 +23,7 @@
         [:ol {:key "ol"}
          (map-indexed #(vector :li {:key %1} %2)
            ["Paste your CCL."
-            "Click Reflow to adjust whitespace for your CCL and SQL"
+            "Click Widen and/or Reflow to adjust whitespace for your CCL and SQL"
             "Click Translate to start the process of converting from CCL to SQL"])]]
       [:div {:key "shallow"
              :class "col-md-4 vtop"}

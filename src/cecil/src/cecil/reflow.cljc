@@ -506,3 +506,7 @@
                       (js->clj jsObj_options)
                       (zipmap (map name option-keys) option-keys))]
         (tokenize-and-reflow (str ccl) options))))
+
+(defn ^:export reflowWide
+  [s]
+  (string/trim (util/canonical-whitespace s)))

@@ -55,7 +55,8 @@
         <a id='ccl' href="#ccl">
             <h3>CCL</h3>
         </a>
-        <a class="btn btn-default" onclick="reflow('ccl');" accesskey="c">Reflow <U>C</U>CL</a>
+        <a class="btn btn-default" onclick="reflow('ccl', 'reflow');" accesskey="c">Reflow <U>C</U>CL</a>
+        <a class="btn btn-default" onclick="reflow('ccl', 'widen');" accesskey="l">Widen CC<U>L</U></a>
         <div id='ccl-cm-container'></div>
         <textarea id='cclArea' rows=40 cols=100>
   select distinct    ; single-line comment;
@@ -102,7 +103,8 @@
         <a id='sql' href="#sql">
             <h3>Oracle SQL</h3>
         </a>
-        <a class="btn btn-default" onclick="reflow('sql');" accesskey="s">Reflow <U>S</U>QL</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'reflow');" accesskey="s">Reflow <U>S</U>QL</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'widen');" accesskey="q">Widen S<U>Q</U>L</a>
         <div id='sql-cm-container' class='calculated'></div>
     </div>
     <div>
@@ -127,14 +129,17 @@
             'ccl':cclCM,
             'sql':sqlCM}
 
-        var reflow = function reflow(id){
+        var reflow = function reflow(id, mode){
             var sqlOrError = ""
             var cm = cmById[id]
             var before = cm.getValue("\r\n")
             var report = ""
             try {
-                var after = cecil.reflow.tokenizeAndReflow(before, {}).trim()
-                cm.setValue(after);
+                var after =
+                    mode == 'widen' ? cecil.reflow.reflowWide(before)
+                  : mode == 'reflow' ? cecil.reflow.tokenizeAndReflow(before, {})
+                  : below;
+                cm.setValue(after.trim());
             } catch (e) {
                 console.error(e)
                 reportCM.setValue(e.toString())
