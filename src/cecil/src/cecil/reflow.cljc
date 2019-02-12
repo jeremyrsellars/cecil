@@ -5,7 +5,6 @@
    [clojure.spec.alpha :as s]
    [clojure.pprint :as pprint]
    [clojure.walk :as walk]
-   [cecil.cki :as cki]
    [cecil.ccl-to-sql :as cts :refer [assert-ast-node
                                      assert-ast-node-and-tokens
                                      assert-ast-nodes-and-tokens
@@ -483,7 +482,7 @@
          (walk/postwalk indention-walker-second-pass)
          (walk/prewalk
           (ws-walker
-            (get options :indent "  ")
+            (get options :indent "    ")
             (get options :new-line "\r\n"))))))
 
 (defn tokenize-and-reflow
