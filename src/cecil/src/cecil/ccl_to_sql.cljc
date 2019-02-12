@@ -256,6 +256,7 @@
     (cond
       (re-find #"(?i)\bgroup(?:\s+by)?\b" s) :group-by
       (re-find #"(?i)\border\s+by\b" s)      :order-by
+      (re-find #"(?i)\bjoin$" s)         :join
       (re-find #"^'" s)                  :string-single
       (re-find #"^\"" s)                 :string-double
       (re-find #"^\d" s)                 :number)))
@@ -729,11 +730,14 @@
          (filter some?)))
 
   (defn emit-string
-    [ast-nodes]
+   ([ast-nodes]
+    (emit-string ast-nodes identity))
+   ([ast-nodes standardize-tokens]
     (->> ast-nodes
          emit-tokens
+         standardize-tokens
          (string/join "")
-         remove-empty-lines)))
+         remove-empty-lines))))
 
 (let [as {:type :keyword
           :leading-whitespace " "
