@@ -6,27 +6,27 @@
 
   :min-lein-version "2.7.1"
 
-  :dependencies [[org.clojure/clojure "1.9.0"]
-                 [org.clojure/clojurescript "1.9.946"]
-                 [devcards "0.2.4"]
-                 [sablono "0.8.1"]
+  :dependencies [[org.clojure/clojure "1.10.0"]
+                 [org.clojure/clojurescript "1.10.516"]
+                 [devcards "0.2.6"]
+                 [sablono "0.8.5"]
 
                  ;; need to specify this for sablono
                  ;; when not using devcards
-                 [cljsjs/react "15.6.2-0"]
-                 [cljsjs/react-dom "15.6.2-0"]
-                 [cljsjs/react-dom-server "15.6.2-0"]
+                 [cljsjs/react "16.8.1-0"]
+                 [cljsjs/react-dom "16.8.1-0"]
+                 [cljsjs/react-dom-server "16.8.1-0"]
                  #_[org.omcljs/om "1.0.0-alpha46"]
                  #_[reagent "0.6.0"]
                  ]
 
-  :plugins [[lein-figwheel "0.5.14"]
+  :plugins [[lein-figwheel "0.5.18"]
             [lein-cljsbuild "1.1.5" :exclusions [org.clojure/clojure]]]
 
   :clean-targets ^{:protect false} ["resources/public/js/compiled"
                                     "target"]
 
-  :source-paths ["src"]
+  :source-paths ["src" "test"]
   :main cecil.cli
 
   :cljsbuild {
@@ -62,8 +62,8 @@
   :figwheel { :css-dirs ["resources/public/css"]
               :server-port 3469}
 
-  :profiles {:dev {:dependencies [[binaryage/devtools "0.9.8"]
-                                  [figwheel-sidecar "0.5.14"]
+  :profiles {:dev {:dependencies [[binaryage/devtools "0.9.10"]
+                                  [figwheel-sidecar "0.5.18"]
                                   [com.cemerick/piggieback "0.2.2"]]
                    ;; need to add dev source path here to get user.clj loaded
                    :source-paths ["src" "dev"]
