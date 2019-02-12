@@ -11,6 +11,7 @@
    [cecil.ccl-to-sql-test]
    [cecil.cki-test]
    [cecil.reflow-test]
+   [cecil.standardize-test]
    [cecil.util-test]
    [cecil.core :as cecil])
   (:require-macros

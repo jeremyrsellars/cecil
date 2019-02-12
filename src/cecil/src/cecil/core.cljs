@@ -8,6 +8,7 @@
    [cecil.util :as util]
    [cecil.ccl-to-sql :as cts]
    [cecil.reflow]
+   [cecil.standardize]
    [cljsjs.react.dom]))
 
 (enable-console-print!)

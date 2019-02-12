@@ -42,7 +42,7 @@
     </div>
     <div id="main-app-area"></div>
     <div id='app'>
-        
+
         <script src="./js/compiled/cecil.js" type="text/javascript"></script>
         <style>
             #com-rigsomelight-devcards-main {display: none;}
@@ -137,7 +137,7 @@
             try {
                 var after =
                     mode == 'widen' ? cecil.reflow.reflowWide(before)
-                  : mode == 'reflow' ? cecil.reflow.tokenizeAndReflow(before, {})
+                  : mode == 'reflow' ? cecil.standardize.tokenizeAndStandardize(before, {})
                   : below;
                 cm.setValue(after.trim());
             } catch (e) {
