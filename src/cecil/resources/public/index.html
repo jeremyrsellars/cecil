@@ -105,6 +105,7 @@
         </a>
         <a class="btn btn-default" onclick="reflow('sql', 'reflow');" accesskey="s">Reflow <U>S</U>QL</a>
         <a class="btn btn-default" onclick="reflow('sql', 'widen');" accesskey="q">Widen S<U>Q</U>L</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'case');" accesskey="c">Change SQL <U>C</U>ase</a>
         <div id='sql-cm-container' class='calculated'></div>
     </div>
     <div>
@@ -138,6 +139,7 @@
                 var after =
                     mode == 'widen' ? cecil.reflow.reflowWide(before)
                   : mode == 'reflow' ? cecil.standardize.tokenizeAndStandardize(before, {})
+                  : mode == 'case' ? cecil.standardize.tokenizeAndStandardizeCase(before, {})
                   : below;
                 cm.setValue(after.trim());
             } catch (e) {

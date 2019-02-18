@@ -9,7 +9,6 @@
                                      assert-ast-node-and-tokens
                                      assert-ast-nodes-and-tokens
                                      assert-ast-nodes
-                                     canonical-keyword
                                      token-of-type?]]
    [cecil.util :as util]))
 
@@ -33,7 +32,7 @@
         "level library like limited local lock log logging long loop "
         "master maxextents maxtrans member minextents minus mislabel mode modify multiset "
         "new next no noaudit nocompress nologging noparallel not nowait number_base "
-        "object of off offline on online only open option or order out "
+        "object of off offline on online only open option or order out over "
         "package parallel partition pctfree pctincrease pctused pls_integer positive positiven pragma primary prior "
         "private privileges procedure public "
         "raise range raw read rebuild record ref references refresh release rename replace resource restrict return "
@@ -44,6 +43,13 @@
         "union unique unlimited unrecoverable unusable update use using "
         "validate values variable view views "
         "when whenever where while with work"))
+
+(def sql-keywords
+  (->>
+     (string/split keywords #"\s+")
+     (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join")
+     (map keyword)
+     (into #{})))
 
 (def functions
    (str "abs acos add_months ascii asin atan atan2 average "
@@ -61,7 +67,7 @@
         "nls_sort nls_upper nlssort no_data_found notfound null nvl "
         "others "
         "power "
-        "rawtohex reftohex round rowcount rowidtochar rpad rtrim "
+        "rawtohex reftohex round rowcount row_number rowidtochar rpad rtrim "
         "sign sin sinh soundex sqlcode sqlerrm sqrt stddev substr substrb sum sysdate "
         "tan tanh to_char to_date to_label to_multi_byte to_number to_single_byte translate true trunc "
         "uid upper user userenv "
@@ -102,6 +108,50 @@
   [tokens]
   (split-with valid-whitespace-or-comment? tokens))
 
+(def mononymous-token->type ; tokens with a single representation (name)
+  {"."  :dot
+   ","  :comma
+   "="  :equals
+   "!=" :not-equals
+   "<>" :not-compare
+   "("  :lparen
+   ")"  :rparen})
+
+(defn token->type
+  [s]
+  (or
+    (get mononymous-token->type s)
+    (cond
+      (re-find #"(?i)\bgroup(?:\s+by)?\b" s) :group-by
+      (re-find #"(?i)\border\s+by\b" s)      :order-by
+      (re-find #"(?i)\bjoin$" s)             :join
+      (re-find #"^'" s)                      :string-single
+      (re-find #"^\"" s)                     :string-double
+      (re-find #"^\d" s)                     :number)))
+
+(defn canonical-keyword
+  [s]
+  (keyword (string/lower-case s)))
+
+(defn string->token
+  [s]
+  (if (nil? s)
+    {:type :terminal
+     :nodes []}
+    (assoc
+      (if-let [tt (token->type s)]
+        {:type tt}
+        (let [kw (canonical-keyword s)]
+          (if-let [ck (sql-keywords kw)]
+            {:type :keyword
+             :keyword ck}
+            {:type (cond
+                      (string/blank? s)         :whitespace
+                      :else                     :identifier)})))
+      :nodes [s])))    ; consider interning here
+
+
+
 (defn next-token
   "Gets the next non-whitespace, non-comment token,
   combining leading whitespace and comments into the :leading-whitespace.
@@ -117,7 +167,7 @@
                                            (cons last-following-ws-tokens rst2)]
                                           [[]
                                            rst])]
-    [(cond-> (cts/string->token t)
+    [(cond-> (string->token t)
         (seq leading-tokens)
         (assoc :leading-whitespace (string/join leading-tokens))
 
@@ -201,27 +251,36 @@
   1)
 
 (defmethod node-own-line? :expression
-  [ancestor-nodes {:keys [type keyword sub-type] :as ast-node}]
+  [ancestor-nodes {:keys [type keyword sub-type nodes] :as ast-node}]
   (case sub-type
     :parenthetical
-    false
-    ; (if-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
-    ;   (not (= :function-invocation ancester-type))
-    ;   false)
+    (let [emited (cts/emit-string (assoc ast-node :type :measure-length))]
+      (or (<= *break-parenthetical-length* (count emited))
+          (boolean (re-find #"\\n" (string/trim emited)))))
+
+    :parenthetical-indent
+    (let [emited (cts/emit-string (assoc ast-node :type :measure-length))]
+      (or (<= *break-parenthetical-length* (count emited))
+          (boolean (re-find #"\\n" (string/trim emited)))))
+
     false))
 
 (defmethod relative-indent :expression
-  [ancestor-nodes ast-node]
+  [ancestor-nodes {:keys [sub-type] :as ast-node}]
   (or
     (when-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
       (cond
-        (and (not= ancester-type :function-invocation)
-             (is-parenthetical-expression? ast-node))
+        (and (= :parenthetical-indent sub-type) (node-own-line? (cons ast-node ancestor-nodes) (-> ast-node :nodes first)))
         1
 
-        (node-own-line? ancestor-nodes ast-node)
-        1))
+        (or (node-own-line? ancestor-nodes ast-node)
+            (and (= :expression ancester-type)
+                 (node-own-line? ancestor-nodes ancestor)))
+        1
 
+        (and (not= ancester-type :function-invocation)
+             (is-parenthetical-expression? ast-node))
+        0))
     0))
 
 (defmethod node-own-line? :lparen
@@ -240,18 +299,24 @@
   [_ {:keys [type keyword] :as ast-node}]
   true)
 
+(defmethod node-own-line? :join
+  [ancestor-nodes ast-node]
+  true)
+
 (defmethod node-own-line? :group-by
-  [ancestor-nodes {:keys [keyword] :as ast-node}]
+  [ancestor-nodes ast-node]
   true)
 
 (defmethod node-own-line? :order-by
-  [ancestor-nodes {:keys [keyword] :as ast-node}]
-  true)
+  [ancestor-nodes ast-node]
+  (if-let [ancestor-kw (some #(when (ast-node? %) (-> % :nodes first :keyword)) ancestor-nodes)]
+    (= ancestor-kw :from)
+    false))
 
 (defmethod node-own-line? :keyword
   [ancestor-nodes {:keys [keyword] :as ast-node}]
   (case keyword
-    :select             (not (seq ancestor-nodes))
+    :select             true
 
     :and                true
     :or                 true
@@ -272,13 +337,13 @@
     :default
     (if-let [{ancester-type :type :as ancestor} (first (filter ast-node? ancestor-nodes))]
       (if (and (= :select ancester-type) (= :distinct keyword))
-        0
+        nil
         0)
       nil)))
 
 (defmethod node-own-line? :select ; = :type
   [_ _]
-  false)
+  true)
 
 (defmethod node-own-line? :whitespace
   [_ {:keys [type keyword] :as ast-node}]
@@ -347,8 +412,8 @@
 (defn parse-parenthetical
   "Returns [expression remaining-tokens]"
   [tokens]
-  (let [[nt tokens] (next-token tokens)]
-    (loop [parts [nt]
+  (let [[ft tokens] (next-token tokens)]
+    (loop [parts []
            tokens tokens]
       (let [[nt remaining] (next-token tokens)]
         (when (token-of-type? nt :terminal)
@@ -358,7 +423,11 @@
         (cond
           (token-of-type? nt :rparen :terminal)
           [{:type :expression :sub-type :parenthetical
-            :nodes (conj parts nt)}
+            :nodes
+            [ft
+             {:type :expression :sub-type :parenthetical-indent
+              :nodes parts}
+             nt]}
            remaining]
 
           (token-of-type? nt :comma)
@@ -370,7 +439,7 @@
                (-> nt :keyword (= :select)))
           (let [[sel tokens] (parse-select tokens)]
             (recur
-              (conj parts sel)
+              (conj parts (remove-leading-whitespace-in-first-node sel))
               tokens))
 
           ; non-terminal
@@ -464,7 +533,8 @@
     (let [{:keys [type sub-type]} ast-node
           lazy-should-break-on-commas
           (delay (or (not= :expression type)
-                     (not= :parenthetical sub-type)
+                     (and (not= :parenthetical sub-type)
+                          (not= :parenthetical-indent sub-type))
                      (<= *break-parenthetical-length* (count (cts/emit-string ast-node)))))]
       (assoc ast-node
         :nodes
@@ -521,23 +591,30 @@
                               [nil tokens]))
         [select-list-parsed tokens] (parse-select-list tokens)
         [next-expression remaining] (parse-expression tokens #(token-of-type? % :rparen))
-        from-etc (update next-expression
-                    :nodes (fn [nodes]
-                              (mapv
-                                (fn [prev-top-level? {:keys [keyword type] :as node}]
-                                  (cond-> node
-                                    (and ;(not prev-top-level?)
-                                     (not (contains? top-level-keywords (or keyword type))))
-                                    (assoc :indent 1)))
-
-                                    ; prev-top-level?
-                                    ; (assoc :own-line? false)))
-                                (cons false
-                                  (map
-                                    (fn [{:keys [keyword type] :as node}]
-                                      (contains? top-level-keywords (or keyword type)))
-                                    nodes))
-                                nodes)))
+        from-etc (assoc next-expression
+                    :nodes
+                    (loop [nodes (get next-expression :nodes)
+                           prev-indent 0
+                           prev-top-level? false
+                           prev-same-line? false
+                           new-nodes []]
+                      (if-not (seq nodes)
+                        new-nodes
+                        (let [[{:keys [keyword type] :as node} & remaining-nodes] nodes
+                              is-top-level? (contains? top-level-keywords (or keyword type))
+                              is-same-line? (and (not is-top-level?)
+                                                 prev-same-line?
+                                                 (not (token-of-type? node :comma :field-conjunction :keyword)))
+                              indent (cond is-top-level?             0
+                                           is-same-line?             prev-indent
+                                           :default                  1)
+                              new-node (assoc node :indent indent)]
+                          (recur
+                            remaining-nodes
+                            indent
+                            is-top-level?
+                            (or is-top-level? is-same-line?)
+                            (conj new-nodes new-node))))))
         select-list
         {:type :select-list
          :nodes (assert-ast-nodes select-list-parsed)}]
@@ -551,11 +628,46 @@
                   (assert-ast-node from-etc)]))}
       remaining])))
 
+(defn parse-with
+  [tokens]
+  (let [[nt tokens] (next-token tokens)]
+    (loop [parts [nt]
+           tokens tokens]
+      (let [[nt remaining] (next-token tokens)]
+        (cond
+          (token-of-type? nt :terminal)
+          [{:type :expression, :sub-type :with
+            :nodes (conj parts nt)}
+           remaining]
+
+          (and (token-of-type? nt :keyword)
+               (-> nt :keyword (= :select)))
+          (let [[sel tokens] (parse-select tokens)]
+            (recur
+              (conj parts sel)
+              tokens))
+
+          (token-of-type? nt :lparen)
+          (let [[expr remaining] (parse-parenthetical tokens)]
+            (recur (conj parts expr) remaining))
+
+          ; non-terminal
+          :else
+          (let [[expr remaining] (parse-expression tokens #(-> % :keyword (= :select)))]
+            (recur (conj parts expr) remaining)))))))
+
+(defn parse-with-or-select
+  [tokens]
+  (let [[kw with-tokens] (next-token tokens)]
+    (case (:keyword kw)
+      :with (parse-with tokens)
+      (parse-select tokens))))
+
 (defn tokenize-and-parse
-  [ccl]
-  (let [tokens (util/tokenize ccl)]
+  [sql]
+  (let [tokens (util/tokenize sql)]
    (assert-ast-node-and-tokens
-    (parse-select tokens))))
+    (parse-with-or-select tokens))))
 
 (defn prewalk-ancestry
   "Like clojure.walk/prewalk, but includes hiarchical ancestry."
@@ -601,10 +713,6 @@
     (if-not (ast-node? x)
       x
       (let [{:keys [absolute-indent indent own-line? type keyword leading-whitespace]} x]
-        ; (println :x (str \" (cts/emit-string (dissoc x :leading-whitespace)) \")
-        ;   :kw  (some? keyword)
-        ;   :ccl (contains? cts/ccl-keywords keyword)
-        ;   :sl? (not own-line?))
         (cond-> x
           (not (some? indent))
           (dissoc :indent)
@@ -650,12 +758,21 @@
                         t)))))
 
 (defn tokenize-and-standardize
-  [ccl options]
-  (-> ccl
+  [sql options]
+  (-> sql
       string/trim
       tokenize-and-parse
       (standardize options)
       (cts/emit-string standardize-tokens)))
+
+(defn standardize-case
+  [sql options]
+  (->> sql
+       string/trim
+       util/tokenize
+       standardize-tokens
+       (string/join "")
+       cts/remove-empty-lines))
 
 (def option-keys
  [:indent
@@ -665,11 +782,19 @@
 
 #?(:cljs
     (defn ^:export tokenizeAndStandardize
-      [ccl jsObj_options]
+      [sql jsObj_options]
       (let [options (set/rename
                       (js->clj jsObj_options)
                       (zipmap (map name option-keys) option-keys))]
-        (tokenize-and-standardize (str ccl) options))))
+        (tokenize-and-standardize (str sql) options))))
+
+#?(:cljs
+    (defn ^:export tokenizeAndStandardizeCase
+      [sql jsObj_options]
+      (let [options (set/rename
+                      (js->clj jsObj_options)
+                      (zipmap (map name option-keys) option-keys))]
+        (standardize-case (str sql) options))))
 
 (defn ^:export standardizeWide
   [s]

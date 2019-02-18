@@ -713,7 +713,7 @@
 
 (defn remove-empty-lines
   [s]
-  (string/replace s #"(\r?\n)(?:\r?\n)+" "$1"))
+  (string/replace s #"(\r?\n)(?:[\r\t\u0020]*\n)+" "$1"))
 
 (letfn [(emit-leading-whitespace-and-tokens [x]
           (cond (map? x)          (let [{:keys [leading-whitespace nodes following-comment]} x]
