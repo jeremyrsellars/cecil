@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta property="og:url" content="https://jeremyrsellars.github.io/cecil/">
+    <meta property="og:site_name" content="Cecil">
+    <meta property="og:title" content="CeCiL - SQL Power Tools">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="CeCiL normalizes SQL select statements.">
+    <meta property="og:image" content="https://jeremyrsellars.github.io/cecil/img/lion-pixels.png">
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="340">
+    <meta property="og:image:height" content="431">
+
+    <title>CeCiL - SQL Power Tools</title>
+    <link href="data:image/x-icon;base64,AAABAAEAEBAQAAAAAAAoAQAAFgAAACgAAAAQAAAAIAAAAAEABAAAAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAjjuEAAAAAAAB60AAB6v8AcQDwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAERERERERERERERERERERERERERERERERERESIgIgERERESAiIiIhERESIjMzMgIRERIjM0MzIhERICMTMxMiEREiIzMzMyARERICMzMyIhEREjMiIiMyERERMiIgIjERERERICIhERERERERERERERERERERERERERERERERERH//wAA//8AAP//AAD4DwAA8AcAAOADAADgAwAAwAMAAMADAADgAwAA4AMAAPAHAAD8HwAA//8AAP//AAD//wAA" rel="icon" type="image/x-icon" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link href="./css/cecil_style.css" rel="stylesheet" type="text/css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.13.2/codemirror.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.13.2/codemirror.css">
+    <style>
+        .CodeMirror { height: auto; border-color: silver; border-style:solid;
+          border-width:1px}
+    </style>
+    <script src="https://codemirror.net/2/mode/plsql/plsql.js"></script>
+    <!-- About the untimely death of Cecil.  I haven't researched this at all, but I'm not a fan of killing one-of-a-kind animals for sport.
+    -->
+  </head>
+  <body>
+    <div class="container">
+        <div class="jumbotron">
+            <img src='./img/lion-pixels.png' width="340" height="431" style="float: right; margin: 1em;" />
+            <h1>CeCiL - SQL Power Tools</h1>
+            <p>
+                <h3>CeCiL normalizes SQL select statements.</h3>
+
+                <h4>Pre-release software.  Use at your own risk. <span class = "label label-warning">Beta</span></h4>
+                <a class="btn btn-primary btn-lg" href="#translate" role="button">SQL Power Tools >></a>
+                <a class="btn btn-default btn-lg" href="index.html" role="button">CCL Power Tools >></a>
+            </p>
+        </div>
+    </div>
+    <div id='app'>
+
+        <script src="./js/compiled/cecil.js" type="text/javascript"></script>
+        <style>
+            #com-rigsomelight-devcards-main {display: none;}
+        </style>
+        <script src="./js/compiled/cecil_devcards.js" type="text/javascript"></script>
+    </div>
+    <div>
+        <a id='SQL' href="#SQL">
+            <h3>Oracle SQL</h3>
+        </a>
+        <a id='normalize' href="#normalize"></a>
+        <a class="btn btn-primary" onclick="reflow('sql', 'reflow');" role="button" accesskey="n"><U>N</U>ormalize</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'widen');" accesskey="q">Widen S<U>Q</U>L</a>
+        <a class="btn btn-default" onclick="reflow('sql', 'case');" accesskey="c">Change SQL <U>C</U>ase</a>
+        <div id='sql-cm-container'></div>
+        <textarea id='sqlArea' rows=40 cols=100>
+ WITH order_task_activity AS ( -- comment Case is NoT affected
+    SELECT
+        Row_number() OVER (PARTITION BY order_id ORDER BY Update_Date DESC) AS rank, order_id , task_status_code , task_status_reason_code
+    FROM task_activity
+    WHERE Update_Date > :StartDate         AND order_id != 0
+)
+Select     O.order_id, O.activity_type_code As Account_code, O.order_small_name, C.processed_state
+    , C.item_extended_price As Price
+from Orders O
+left Join Charge C
+    On O.order_id = C.order_id
+    And C.processed_state != 7821
+    And C.charge_item_id = 0
+LEFT JOIN order_task_activity ota
+    ON o.order_id = ota.order_id
+    AND ota.rank = 1
+WHERE o.orig_order_date >= :StartDate
+    AND o.orig_order_date <= :EndDate
+    AND Nvl(ota.task_status_reason_code, 0) != :TaskStatusReasonNotDoneCode])
+        </textarea>
+    </div>
+    <script type="text/javascript">
+        var cmData =
+            {
+                lineNumbers: true,
+                // lineWrapping: true,
+                matchBrackets: true,
+                indentUnit: 2,
+                mode: "text/x-plsql",
+                value: "select 'sql goes here' from dual"
+            };
+        var sqlCM = CodeMirror(document.getElementById('sql-cm-container'), cmData)
+
+        var cmById = {'sql':sqlCM}
+
+        var reflow = function reflow(id, mode){
+            var sqlOrError = ""
+            var cm = cmById[id]
+            var sql = cm.getValue("\r\n")
+            try {
+                var after =
+                    mode == 'widen' ? cecil.reflow.reflowWide(sql)
+                  : mode == 'reflow' ? cecil.standardize.tokenizeAndStandardize(sql, {})
+                  : mode == 'case' ? cecil.standardize.tokenizeAndStandardizeCase(sql, {})
+                  : below;
+                cm.setValue(after.trim());
+            } catch (e) {
+                console.error(e)
+            }
+        }
+
+        var semiAutomate = function semiAutomate(){
+            reflow('sql', 'case');
+        }
+        setTimeout(function replaceTextAreaWithCodeMirror(){
+            var sqlArea = document.getElementById("sqlArea");
+            sqlCM.setValue(sqlArea.value)
+            sqlArea.outerHTML = "";
+            semiAutomate();
+        }, 1000)
+
+        // ;global called by cljs (for figwheel reloading)
+        function onReload(){
+            semiAutomate()
+        }
+    </script>
+  </body>
+</html>
