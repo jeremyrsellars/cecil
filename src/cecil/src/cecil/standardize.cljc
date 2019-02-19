@@ -779,11 +779,13 @@
   :new-line
   :break-parenthetical-length])
 
-(defrecord Options [indent new-line break-parenthetical-length] :load-ns true)
-(definterface ISqlNormalizer
-  (^String Normalize     [^String sql])
-  (^String NormalizeCase [^String sql])
-  (^String Widen         [^String sql]))
+#?(:cljr
+    (defrecord Options [indent new-line break-parenthetical-length] :load-ns true))
+#?(:cljr
+    (definterface ISqlNormalizer
+      (^String Normalize     [^String sql])
+      (^String NormalizeCase [^String sql])
+      (^String Widen         [^String sql])))
 
 #?(:cljs
     (defn ^:export tokenizeAndStandardize
@@ -794,7 +796,7 @@
         (tokenize-and-standardize (str sql) options)))
    :default
     (defn tokenizeAndStandardize
-      [sql ^Options options]
+      [sql options]
       (tokenize-and-standardize (str sql) options)))
 
 #?(:cljs
@@ -806,18 +808,19 @@
         (standardize-case (str sql) options)))
    :default
     (defn tokenizeAndStandardizeCase
-      [sql ^Options options]
+      [sql options]
       (standardize-case (str sql) options)))
 
 (defn ^:export standardizeWide
   [s]
   (string/trim (util/canonical-whitespace s)))
 
-(defrecord SqlNormalizer [^Options options] :load-ns true
-  ISqlNormalizer
-  (^String Normalize     [this ^String sql]
-    (tokenizeAndStandardize     sql (.-options this)))
-  (^String NormalizeCase [this ^String sql]
-    (tokenizeAndStandardizeCase sql (.-options this)))
-  (^String Widen [this ^String sql]
-    (standardizeWide sql)))
+#?(:cljr
+    (defrecord SqlNormalizer [options]; :load-ns true
+      ISqlNormalizer
+      (^String Normalize     [this ^String sql]
+        (tokenizeAndStandardize     sql (.-options this)))
+      (^String NormalizeCase [this ^String sql]
+        (tokenizeAndStandardizeCase sql (.-options this)))
+      (^String Widen [this ^String sql]
+        (standardizeWide sql))))
