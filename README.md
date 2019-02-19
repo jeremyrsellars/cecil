@@ -16,3 +16,5 @@ Still, there are SQL-compatible substitutions that may be made.  This is where C
 Because the core of Cecil is implemented in cross-platform Clojure (.cljc), it can be fitted for use with JavaScript, Java VM, and the .NET Framework.
 
 An example C#/.Net utility is provided. See [src/Cecil.Net/README.md](src/Cecil.Net/).
+
+If you do want to hack on Cecil, let me know in person, or by github issue.
