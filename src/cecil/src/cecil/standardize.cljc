@@ -1,4 +1,5 @@
 (ns cecil.standardize
+  (:refer-clojure :exclude [keyword])
   (:require
    [clojure.set :as set]
    [clojure.string :as string]
@@ -48,7 +49,7 @@
   (->>
      (string/split keywords #"\s+")
      (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join")
-     (map keyword)
+     (map clojure.core/keyword)
      (into #{})))
 
 (def functions
@@ -131,7 +132,7 @@
 
 (defn canonical-keyword
   [s]
-  (keyword (string/lower-case s)))
+  (clojure.core/keyword (string/lower-case s)))
 
 (defn string->token
   [s]
@@ -234,15 +235,16 @@
 
 (defmulti keyword-own-line?
   (fn [{:keys [keyword] :as ast-node}]
-    keyword))
+    (or keyword :default)))
 
-(defmethod keyword-own-line? :in
-  [ast-node]
-  false)
+(defmethod keyword-own-line? :in             [_] false)
+(defmethod keyword-own-line? :and            [_] true)
+(defmethod keyword-own-line? :or             [_] true)
+(defmethod keyword-own-line? :on             [_] true)
 
 (defmethod keyword-own-line? :default
-  [ast-node]
-  true)
+  [{:keys [keyword] :as ast-node}]
+  (contains? top-level-keywords keyword))
 
 
 (defmulti node-own-line?
@@ -322,16 +324,10 @@
     false))
 
 (defmethod node-own-line? :keyword
-  [ancestor-nodes {:keys [keyword] :as ast-node}]
-  (case keyword
-    :select             true
-
-    :and                true
-    :or                 true
-    :on                 true
-
-    (contains? top-level-keywords keyword)))
-
+  [ancestor-nodes ast-node]
+  (when (= :from (:keyword ast-node))
+    (prn (keyword-own-line? ast-node) ast-node))
+  (keyword-own-line? ast-node))
 
 (defmethod relative-indent :keyword
   [ancestor-nodes {:keys [keyword] :as ast-node}]
