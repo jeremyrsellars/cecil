@@ -1,6 +1,10 @@
 (ns cecil.util
   (:require [clojure.string :as string]))
 
+(defn nil-safe-+
+  [& addends]
+  (reduce + 0 (keep identity addends)))
+
 (def tokens-regex
   #"(?i)\"(?:\"\"|[^\"]+)*\"|'(?:''|[^']+)*'|--[^\r\n]*[\r\n]*|;[^\r\n]*[\r\n]*|/\*(?:(?!\*/)[\s\S])*\*/|\s+|\d+(?:\.\d+)?|!=|<>|(?:inner|left|right|full)\s+(?:outer\s+)?join\b|order\s+by\b|group(?:\s+by)?\b|:?\w+|.")
   ; ccl also uses ;`` as a line comment
