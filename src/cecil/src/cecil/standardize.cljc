@@ -743,7 +743,7 @@
 
 
 (let [key-fn string/lower-case
-      title-case (fn title-case [s] (when (seq s) (str (string/upper-case (first s)) (string/lower-case (apply str (rest s))))))
+      title-case (fn title-case [s] (when (seq s) (str (string/upper-case (str (first s))) (string/lower-case (apply str (rest s))))))
       keywords (->> (string/split keywords #"\s+") (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join") (map string/upper-case) (into #{}))
       types (->> (string/split types #"\s+") (map string/upper-case) (into #{}))
       functions (->> (string/split functions #"\s+") (map title-case) (into #{}))
@@ -779,6 +779,11 @@
   :new-line
   :break-parenthetical-length])
 
+(defrecord Options [indent new-line break-parenthetical-length] :load-ns true)
+(definterface ISqlNormalizer
+  (^String Normalize     [^String sql])
+  (^String NormalizeCase [^String sql])
+  (^String Widen         [^String sql]))
 
 #?(:cljs
     (defn ^:export tokenizeAndStandardize
@@ -786,7 +791,11 @@
       (let [options (set/rename
                       (js->clj jsObj_options)
                       (zipmap (map name option-keys) option-keys))]
-        (tokenize-and-standardize (str sql) options))))
+        (tokenize-and-standardize (str sql) options)))
+   :default
+    (defn tokenizeAndStandardize
+      [sql ^Options options]
+      (tokenize-and-standardize (str sql) options)))
 
 #?(:cljs
     (defn ^:export tokenizeAndStandardizeCase
@@ -794,8 +803,21 @@
       (let [options (set/rename
                       (js->clj jsObj_options)
                       (zipmap (map name option-keys) option-keys))]
-        (standardize-case (str sql) options))))
+        (standardize-case (str sql) options)))
+   :default
+    (defn tokenizeAndStandardizeCase
+      [sql ^Options options]
+      (standardize-case (str sql) options)))
 
 (defn ^:export standardizeWide
   [s]
   (string/trim (util/canonical-whitespace s)))
+
+(defrecord SqlNormalizer [^Options options] :load-ns true
+  ISqlNormalizer
+  (^String Normalize     [this ^String sql]
+    (tokenizeAndStandardize     sql (.-options this)))
+  (^String NormalizeCase [this ^String sql]
+    (tokenizeAndStandardizeCase sql (.-options this)))
+  (^String Widen [this ^String sql]
+    (standardizeWide sql)))

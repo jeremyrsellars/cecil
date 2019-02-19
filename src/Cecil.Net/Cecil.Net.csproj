@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{80B970D5-9AFC-400F-84AB-32A42AB913FE}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Cecil.Net</RootNamespace>
+    <AssemblyName>Cecil.Net</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="cecil.ccl_to_sql.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.ccl_to_sql.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.cki.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.cki.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.cki_macros.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.cki_macros.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.cli.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.cli.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.reflow.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.reflow.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.standardize.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.standardize.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="cecil.util.cljc">
+      <HintPath>$(SolutionDir)\..\lib\cecil.util.cljc.dll</HintPath>
+    </Reference>
+    <Reference Include="clojure.core.specs.alpha">
+      <HintPath>$(SolutionDir)\..\lib\clojure.core.specs.alpha.dll</HintPath>
+    </Reference>
+    <Reference Include="Clojure">
+      <HintPath>$(SolutionDir)\..\lib\Clojure.dll</HintPath>
+    </Reference>
+    <Reference Include="clojure.spec.alpha">
+      <HintPath>$(SolutionDir)\..\lib\clojure.spec.alpha.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Dynamic">
+      <HintPath>$(SolutionDir)\..\lib\Microsoft.Dynamic.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Scripting">
+      <HintPath>$(SolutionDir)\..\lib\Microsoft.Scripting.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
