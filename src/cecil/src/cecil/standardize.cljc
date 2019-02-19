@@ -232,9 +232,17 @@
   [_ _]
   0)
 
-(defmulti change-case
-  (fn [{:keys [type] :as ast-node}]
-    type))
+(defmulti keyword-own-line?
+  (fn [{:keys [keyword] :as ast-node}]
+    keyword))
+
+(defmethod keyword-own-line? :in
+  [ast-node]
+  false)
+
+(defmethod keyword-own-line? :default
+  [ast-node]
+  true)
 
 
 (defmulti node-own-line?
@@ -331,7 +339,7 @@
     (contains? top-level-keywords keyword)
     0
 
-    (= :on keyword)
+    (#{:on :in} keyword)
     0
 
     :default
@@ -461,8 +469,10 @@
         ;terminal or empty
         (or (token-of-type? nt :terminal)
             (some #(% nt) terminal-fns))
-        [{:type :expression
-          :nodes (assert-ast-nodes parts)}
+        [(if (== 1 (count parts))
+           (first parts)
+           {:type :expression
+            :nodes (assert-ast-nodes parts)})
          tokens] ; don't eat terminal
 
         ; non-terminal
@@ -604,7 +614,9 @@
                               is-top-level? (contains? top-level-keywords (or keyword type))
                               is-same-line? (and (not is-top-level?)
                                                  prev-same-line?
-                                                 (not (token-of-type? node :comma :field-conjunction :keyword)))
+                                                 (not (or (token-of-type? node :comma :field-conjunction)
+                                                          (and (token-of-type? node :keyword)
+                                                               (keyword-own-line? node)))))
                               indent (cond is-top-level?             0
                                            is-same-line?             prev-indent
                                            :default                  1)

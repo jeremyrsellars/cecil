@@ -272,4 +272,26 @@
          "    /*block"
          "          comment*/"
          "    , item_id"
-         "FROM order_cat_item_r ocir"])))
+         "FROM order_cat_item_r ocir"])
+
+     (binding [r/*break-parenthetical-length* 20]
+      (test-standardize
+        "select * from dual where dummy in ('X','X','X','X')"
+        ["SELECT"
+         "    *"
+         "FROM dual"
+         "WHERE dummy IN ('X','X','X','X')"]))
+
+     (binding [r/*break-parenthetical-length* 10]
+      (test-standardize
+        "select * from dual where dummy in ('Y','Y','Y','Y')"
+        ["SELECT"
+         "    *"
+         "FROM dual"
+         "WHERE dummy IN"
+         "    ("
+         "        'Y'"
+         "        , 'Y'"
+         "        , 'Y'"
+         "        , 'Y'"
+         "    )"]))))
