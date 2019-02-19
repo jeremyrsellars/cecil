@@ -325,8 +325,6 @@
 
 (defmethod node-own-line? :keyword
   [ancestor-nodes ast-node]
-  (when (= :from (:keyword ast-node))
-    (prn (keyword-own-line? ast-node) ast-node))
   (keyword-own-line? ast-node))
 
 (defmethod relative-indent :keyword
