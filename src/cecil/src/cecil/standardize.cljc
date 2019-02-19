@@ -683,9 +683,10 @@
              first)]
     (-> ast-node
         (assoc :absolute-indent
-          (+ absolute-indent
-             current-indent
-             (relative-indent ancestor-nodes ast-node)))
+          (util/nil-safe-+
+            absolute-indent
+            current-indent
+            (relative-indent ancestor-nodes ast-node)))
         (update :own-line? #(or % (node-own-line? ancestor-nodes ast-node)))
         insert-newline-before-commas-etc
         move-comments-before-commas)))
@@ -732,14 +733,14 @@
 (defn standardize
   [ast-node options]
   (binding [*break-parenthetical-length*
-            (get options :break-parenthetical-length *break-parenthetical-length*)]
+            (or (get options :break-parenthetical-length) *break-parenthetical-length*)]
     (->> ast-node
          (prewalk-ancestry indention-walker-first-pass '())
          (walk/postwalk indention-walker-second-pass)
          (walk/prewalk
           (ws-walker
-            (get options :indent "    ")
-            (get options :new-line "\r\n"))))))
+            (or (get options :indent)   "    ")
+            (or (get options :new-line) "\r\n"))))))
 
 
 (let [key-fn string/lower-case
@@ -780,7 +781,7 @@
   :break-parenthetical-length])
 
 #?(:cljr
-    (defrecord Options [indent new-line break-parenthetical-length] :load-ns true))
+    (defrecord Options [^String indent ^String new-line break-parenthetical-length] :load-ns true))
 #?(:cljr
     (definterface ISqlNormalizer
       (^String Normalize     [^String sql])
