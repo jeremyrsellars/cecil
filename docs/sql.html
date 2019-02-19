@@ -59,25 +59,27 @@
         <a class="btn btn-default" onclick="reflow('sql', 'case');" accesskey="c">Change SQL <U>C</U>ase</a>
         <div id='sql-cm-container'></div>
         <textarea id='sqlArea' rows=40 cols=100>
- WITH order_task_activity AS (/* See Here: */ -- comment Case is NoT affected
-    SELECT
+ With order_task_activity AS (/* See Here: */ -- comment Case is NoT affected
+    Select
         Row_number() OVER (PARTITION BY order_id ORDER BY Update_Date DESC) AS rank, order_id , task_status_code , task_status_reason_code
-    FROM task_activity
-    WHERE Update_Date > :StartDate         AND order_id != 0
+    from task_activity WHERE Update_Date > :StartDate         AND order_id != 0
 )
 Select     O.order_id, O.activity_type_code As Account_code, O.order_small_name, C.processed_state
-    , C.item_extended_price As Price,
+    , C.item_extended_price As Price, -- crazy commas!
     'String Case is not affected' as "quoted.IDentifier"
 from Orders O
-left Join Charge C
+  left Join Charge C
     On O.order_id = C.order_id
-    And C.processed_state != 7821
+        And C.processed_state != 7821
     And C.charge_item_id = 0
-LEFT JOIN order_task_activity ota
-    ON o.order_id = ota.order_id
-    AND ota.rank = 1
+left JOIN order_task_activity ota
+                ON o.order_id = ota.order_id
+       AND ota.rank = 1
 WHERE o.orig_order_date >= :StartDate
-    AND o.orig_order_date <= :EndDate
+    and o.orig_order_date <= :EndDate
+    and o.description like '%this%'
+    and o.category in ('x', 'y', 'zed')
+    or o.category in ('x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', 'x', 'y', 'zed', )
     AND Nvl(ota.task_status_reason_code, 0) != :TaskStatusReasonNotDoneCode])
         </textarea>
     </div>
@@ -118,7 +120,6 @@ WHERE o.orig_order_date >= :StartDate
             var sqlArea = document.getElementById("sqlArea");
             sqlCM.setValue(sqlArea.value)
             sqlArea.outerHTML = "";
-            semiAutomate();
         }, 1000)
 
         // ;global called by cljs (for figwheel reloading)
