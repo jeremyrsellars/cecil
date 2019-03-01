@@ -84,6 +84,9 @@ WHERE o.orig_order_date >= :StartDate
         </textarea>
     </div>
     <script type="text/javascript">
+        var urlSql = new URLSearchParams(window.location.search).get('sql');
+        if(urlSql) sqlArea.value = urlSql;
+
         var cmData =
             {
                 lineNumbers: true,
