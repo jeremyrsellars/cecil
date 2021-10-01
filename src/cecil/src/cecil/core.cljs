@@ -7,6 +7,7 @@
    [cecil.cki :as cki]
    [cecil.util :as util]
    [cecil.ccl-to-sql :as cts]
+   [cecil.honey]
    [cecil.reflow]
    [cecil.standardize]
    [cljsjs.react.dom]))

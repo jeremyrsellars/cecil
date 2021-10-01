@@ -48,7 +48,8 @@
 (def sql-keywords
   (->>
      (string/split keywords #"\s+")
-     (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join")
+     (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join"
+            "union all" "union")
      (map clojure.core/keyword)
      (into #{})))
 
@@ -124,6 +125,7 @@
     (get mononymous-token->type s)
     (cond
       (re-find #"(?i)\bgroup(?:\s+by)?\b" s) :group-by
+      (re-find #"(?i)\bhaving\b" s)          :having
       (re-find #"(?i)\border\s+by\b" s)      :order-by
       (re-find #"(?i)\bjoin$" s)             :join
       (re-find #"^'" s)                      :string-single
