@@ -49,9 +49,9 @@
     (walk/postwalk
       (fn transcode-walk
         [x]
-        (if-not (standardize/ast-node? x)
-          x
-          (:nodes x))))
+        (if-let [nodes (:nodes x)]
+          nodes
+          x)))
     flatten))
 
 (defn- parse-identifier-kw
@@ -70,26 +70,28 @@
     (select-keys node [:type :sub-type :keyword])))
 
 (defmethod parse-expression-node :default
-  [node]
-  (raw {:type :expression
-        :nodes [node "pen1"]}))
+  [node])
+(vector 'parse-expression-node :default node (select-keys node [:type :sub-type :keyword])  (raw {:type :expression})
+        :nodes [node])
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
   [node]
   (parse-identifier-kw (:nodes node)))
 
 (defn- parse-expression-nodes
- ([nodes]
-  (map parse-expression-node nodes)))
+  [& nodes]
+  (cond-> (mapv parse-expression-node nodes)
+    (== 1 (count nodes))
+    first))
 
 (defn- parse-field-definition
   [{:keys [nodes] :as fd-node}]
-; {'parse-field-definition
   (let [[expr as alias] (partition-by #(token-of-keyword? % :as) nodes)]
-    [(apply parse-expression-nodes expr)
-     (parse-identifier-kw
-        (or (first alias) fd-node))]))
-     ;:fd-node fd-node]))
+    (cond-> (apply parse-expression-nodes expr)
+      (not-any? #(= "*" %) (flatten-tokens expr))
+      (vector
+        (parse-identifier-kw
+          (or (first alias) fd-node))))))
 
 (defn- parse-select-list
   [{:keys [nodes]}]
