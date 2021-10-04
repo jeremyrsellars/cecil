@@ -28,7 +28,6 @@
   (and (= type-kw type)
        (= sub-type-kw sub-type))))
 
-
 (defn parse-select
   [nodes]
   {:source 'parse-select
@@ -66,15 +65,22 @@
   (->> node flatten-tokens (string/join " ")
     (vector :raw)))
 
+(defmulti parse-expression-node
+  (fn parse-expression-node_dispatch [node]
+    (select-keys node [:type :sub-type :keyword])))
+
+(defmethod parse-expression-node :default
+  [node]
+  (raw {:type :expression
+        :nodes [node "pen1"]}))
+
+(defmethod parse-expression-node {:type :identifier, :sub-type :composite}
+  [node]
+  (parse-identifier-kw (:nodes node)))
+
 (defn- parse-expression-nodes
- ([node]
-  (raw {:type :expression
-        :nodes [node]}))
- ([n1 & nodes]
- ;{'parse-expression-nodes
-  (raw {:type :expression
-        :nodes (cons n1 nodes)})))
-  ;:ast-nodes ast-nodes)
+ ([nodes]
+  (map parse-expression-node nodes)))
 
 (defn- parse-field-definition
   [{:keys [nodes] :as fd-node}]
@@ -95,7 +101,7 @@
 
 (defn parse-join
   [nodes]
-  (raw {:nodes nodes :type raw}))
+  (raw {:nodes nodes :type :raw}))
   ;(pr-str nodes))
 
 (defmulti assoc-parsed-clause (fn assoc-parsed-clause_dispatch [q clause-kw nodes] clause-kw))
@@ -115,7 +121,7 @@
   (if (re-find #"join" (name clause-kw))
     (assoc-parsed-join q clause-kw nodes)
     (assoc q clause-kw
-      (raw {:nodes nodes}))))
+      (raw {:nodes nodes :type :raw}))))
 
 (defn- parse-from-etc
   [nodes]

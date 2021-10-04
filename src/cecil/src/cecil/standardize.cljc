@@ -130,6 +130,7 @@
       (re-find #"(?i)\bjoin$" s)             :join
       (re-find #"^'" s)                      :string-single
       (re-find #"^\"" s)                     :string-double
+      (= "||" s)                             :concatenation
       (re-find #"^\d" s)                     :number)))
 
 (defn canonical-keyword
