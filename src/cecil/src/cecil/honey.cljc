@@ -70,11 +70,15 @@
     (select-keys node [:type :sub-type :keyword])))
 
 (defmethod parse-expression-node :default
-  [node])
-(vector 'parse-expression-node :default node (select-keys node [:type :sub-type :keyword])  (raw {:type :expression})
-        :nodes [node])
+  [node]
+  (raw {:type :expression
+        :nodes [node]}))
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
+  [node]
+  (parse-identifier-kw (:nodes node)))
+
+(defmethod parse-expression-node {:type :identifier}
   [node]
   (parse-identifier-kw (:nodes node)))
 
@@ -84,14 +88,23 @@
     (== 1 (count nodes))
     first))
 
+(defn- parse-comma-separated-expression-nodes
+  [& nodes]
+  (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
+    (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
+    (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
+    (map #(apply parse-expression-nodes %))))
+
 (defn- parse-field-definition
   [{:keys [nodes] :as fd-node}]
-  (let [[expr as alias] (partition-by #(token-of-keyword? % :as) nodes)]
-    (cond-> (apply parse-expression-nodes expr)
-      (not-any? #(= "*" %) (flatten-tokens expr))
-      (vector
-        (parse-identifier-kw
-          (or (first alias) fd-node))))))
+  (if (token-of-type? fd-node :identifier)
+    (parse-expression-node fd-node)
+    (let [[expr as alias] (partition-by #(token-of-keyword? % :as) nodes)]
+      (cond-> (apply parse-expression-nodes expr)
+        (not-any? #(= "*" %) (flatten-tokens expr))
+        (vector
+          (parse-identifier-kw
+            (or (first alias) fd-node)))))))
 
 (defn- parse-select-list
   [{:keys [nodes]}]
@@ -103,8 +116,9 @@
 
 (defn parse-join
   [nodes]
-  (raw {:nodes nodes :type :raw}))
-  ;(pr-str nodes))
+  (let [[table-and-maybe-alias on expr-nodes] (partition-by #(token-of-keyword? % :on) nodes)]
+    [(into [](map keyword (flatten-tokens table-and-maybe-alias)))
+     (apply parse-expression-nodes expr-nodes)]))
 
 (defmulti assoc-parsed-clause (fn assoc-parsed-clause_dispatch [q clause-kw nodes] clause-kw))
 
@@ -120,18 +134,28 @@
 
 (defmethod assoc-parsed-clause :default
   [q clause-kw nodes]
-  (if (re-find #"join" (name clause-kw))
-    (assoc-parsed-join q clause-kw nodes)
-    (assoc q clause-kw
-      (raw {:nodes nodes :type :raw}))))
+  (cond (re-find #"join" (name clause-kw))
+        (assoc-parsed-join q clause-kw nodes)
+
+        (re-find #"from|order|group" (name clause-kw)) ; comma-separated expressions
+        (assoc q clause-kw
+          (apply parse-comma-separated-expression-nodes nodes))
+
+        (re-find #"where|having" (name clause-kw)) ; expression
+        (assoc q clause-kw
+          (apply parse-expression-nodes nodes))
+
+        :default
+        (assoc q clause-kw
+          (raw {:nodes nodes :type :raw}))))
 
 (defn- parse-from-etc
   [nodes]
   (let [top-clauses
         (partition-all 2
           (partition-by
-            #(or (token-of-type? %    :from :join :group-by :having :order-by)
-                 (token-of-keyword? % :from :join :group-by :having :order-by))  ; cheating to save time and future-proof tokenization
+            #(or (token-of-type? %    :from :join :where :group-by :having :order-by)
+                 (token-of-keyword? % :from :join :where :group-by :having :order-by))  ; cheating to save time and future-proof tokenization
             nodes))]
     (reduce
       (fn assoc-clause [q [key-nodes val-nodes]]
