@@ -238,7 +238,7 @@
     (parse-expression-node fd-node)
     (let [[expr as alias] (partition-by #(token-of-keyword? % :as) nodes)]
       (cond-> (apply parse-expression-nodes expr)
-        (not-any? #(= "*" %) (flatten-tokens expr))
+        true ;(not-any? #(= "*" %) (flatten-tokens expr)) ; what was this for?  It broke `count(*) as whatever`
         (vector
           (parse-identifier-kw
             (or (first alias) fd-node)))))))
