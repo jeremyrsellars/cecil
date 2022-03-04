@@ -21,7 +21,7 @@
   (reduce + 0 (keep identity addends)))
 
 (def tokens-regex
-  #"(?i)\"(?:\"\"|[^\"]+)*\"|'(?:''|[^']+)*'|--[^\r\n]*[\r\n]*|;[^\r\n]*[\r\n]*|/\*(?:(?!\*/)[\s\S])*\*/|\s+|\d+(?:\.\d+)?|!=|<>|(?:inner|left|right|full)\s+(?:outer\s+)?join\b|order\s+by\b|group(?:\s+by)?\b|:?\w+|\|\||.")
+  #"(?i)\"(?:\"\"|[^\"]+)*\"|'(?:''|[^']+)*'|--[^\r\n]*[\r\n]*|;[^\r\n]*[\r\n]*|/\*(?:(?!\*/)[\s\S])*\*/|\s+|\d+(?:\.\d+)?|!=|[<>]+=?|(?:inner|left|right|full)\s+(?:outer\s+)?join\b|order\s+by\b|group(?:\s+by)?\b|:?\w+|\|\||.")
   ; ccl also uses ;`` as a line comment
 
 (defn tokenize
@@ -31,3 +31,16 @@
 (defn canonical-whitespace
   [s]
   (string/replace s tokens-regex #(if (string/blank? %) " " %)))
+
+(defn unwrap-string-double
+  "Takes an SQL encoded-string token in the form of `\"value with \"\"quotes\"\".\"`
+  and yields the decoded string: `value with \"quotes\".`."
+  [encoded-string]
+  (string/replace encoded-string #"^\"|\"$|\"\"" #(if (= "\"\"" %) "\"" "")))
+
+(defn unwrap-string-single
+  "Takes an SQL encoded-string token in the form of `'value with ''quotes''.'`
+  and yields the decoded string: `value with 'quotes'.`."
+  [encoded-string]
+  (string/replace encoded-string #"^'|'$|''" #(if (= "''" %) "'" "")))
+

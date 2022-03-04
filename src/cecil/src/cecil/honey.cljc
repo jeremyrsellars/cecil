@@ -28,10 +28,9 @@
   (and (= type-kw type)
        (= sub-type-kw sub-type))))
 
-(defn parse-select
-  [nodes]
-  {:source 'parse-select
-   :nodes nodes})
+(defn binary-operator-token?
+  [n]
+  (token-of-type? n :equals :not-equals :inequality :not-compare))
 
 (defn- combine-keywords
   [kw-nodes]
@@ -59,11 +58,17 @@
  ;{'parse-identifier-kw node :result
   (->> node flatten-tokens string/join keyword))
 
+(defn- parse-operator-kw
+  [{:keys [nodes sub-type] :as node}]
+  (->> node flatten-tokens string/join string/lower-case keyword))
+
 (defn- raw
   [{:keys [nodes] :as node}]
  ;{'parse-identifier-kw node :result
   (->> node flatten-tokens (string/join " ")
     (vector :raw)))
+
+(declare parse-selects)
 
 (defmulti parse-expression-node
   (fn parse-expression-node_dispatch [node]
@@ -74,26 +79,158 @@
   (raw {:type :expression
         :nodes [node]}))
 
+(defmethod parse-expression-node {:type :string-double}
+  [{:keys [nodes] :as node}]
+  (assert (= 1 (count nodes)))
+  (let [encoded-string (first nodes)]
+    (raw {:type :expression
+          :nodes [(util/unwrap-string-double encoded-string)]})))
+
+(defmethod parse-expression-node {:type :string-single}
+  [{:keys [nodes] :as node}]
+  (assert (= 1 (count nodes)))
+  (let [encoded-string (first nodes)]
+    (raw {:type :expression
+          :nodes [(util/unwrap-string-single encoded-string)]})))
+
+(defmethod parse-expression-node {:type :number}
+  [node]
+  (raw {:type :expression
+        :nodes [node]}))
+
+(defmethod parse-expression-node {:type :expression, :sub-type :parenthetical}
+  [node]
+  (let [child-nodes-without-parens (-> (:nodes node) rest butlast)]
+    (if (every? #(token-of-type? % :expression) child-nodes-without-parens)
+      (cond-> (map parse-expression-node child-nodes-without-parens)
+        (= 1 (count child-nodes-without-parens)) first) ; unwrap when there's only one node, especially `(select...)`
+      (raw {:type :expression
+            :nodes [node]}))))
+
+(defmethod parse-expression-node {:type :expression, :sub-type :parenthetical-indent}
+  [{:keys [nodes] :as node}]
+  (let [child-nodes-without-parens (-> (:nodes node) rest butlast)]
+    (if (every? #(token-of-type? % :select) nodes)
+      (cond-> (map parse-selects nodes)
+        (= 1 (count nodes)) first) ; unwrap when there's only one node, especially `(select...)`
+      (raw {:type :expression
+            :nodes [node]}))))
+
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
   [node]
   (parse-identifier-kw (:nodes node)))
 
 (defmethod parse-expression-node {:type :identifier}
   [node]
+  ;{'identifier}
   (parse-identifier-kw (:nodes node)))
+
+(defn- parse-expression-nodes-inner
+  [& nodes]
+  (mapv parse-expression-node nodes))
+
+(defn- parse-expression-nodes-binary-eq
+  [& nodes]
+  (cond
+    (empty? nodes)
+    {'parse-expression-nodes-binary-eq :empty}
+
+    (== 1 (count nodes))
+    (parse-expression-node (first nodes))
+
+    :more
+    (loop [result-expr nil  ; or should this be nil and check for it below?
+           nodes nodes]
+      (let [[left-nodes [op & right-nodes]]
+            (split-with
+              (complement binary-operator-token?)
+              nodes)]
+        (if-not op
+          (let [left-expr
+                (when (and (coll? left-nodes) (seq left-nodes))
+                  (prn 'parse-expression-nodes-binary-eq left-nodes)
+                  (apply parse-expression-nodes-binary-eq left-nodes))]
+           (cond (and (vector? result-expr)
+                      (vector? left-expr)
+                      (= (first result-expr) (first left-expr)))
+                 (into result-expr left-expr)
+
+                 left-expr
+                 (conj result-expr left-expr)
+
+                 :default
+                 result-expr))
+          (let [expr [(parse-operator-kw op)]
+                left-parsed (when (seq left-nodes) (apply parse-expression-nodes-binary-eq left-nodes))]
+            (recur
+              (cond
+                (and (vector? result-expr)
+                     (vector? left-parsed)
+                     (= (first result-expr) (first left-parsed)))
+                [{'ardant5 (into expr (into result-expr left-parsed))}]
+
+                result-expr          (into expr (into result-expr left-parsed))
+                left-parsed          (conj expr left-parsed)
+                :default             expr)
+              right-nodes)))))))
+
+(defn- parse-expression-nodes-binary-bin
+  [& nodes]
+  (cond
+    (empty? nodes)
+    {'parse-expression-nodes-binary-bin :empty}
+
+    (== 1 (count nodes))
+    (parse-expression-node (first nodes))
+
+    :more
+    (loop [result-expr nil  ; or should this be nil and check for it below?
+           nodes nodes]
+      (let [[left-nodes [op & right-nodes]]
+            (split-with
+              (complement
+                #(or (token-of-type? %    :or :and)
+                     (token-of-keyword? % :or :and)))  ; cheating to save time and future-proof tokenization
+              nodes)]
+        (if-not op
+          (let [_ (prn 'parse-expression-nodes-binary-bin nodes)
+                left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
+            (prn 'ardant9 left-expr result-expr)
+           (cond->> left-expr
+              result-expr (conj result-expr)))
+          (recur
+            (if result-expr
+              [(parse-operator-kw op)
+               (conj result-expr
+                     (apply parse-expression-nodes-binary-bin left-nodes))]
+              [(parse-operator-kw op)
+               (apply parse-expression-nodes-binary-bin left-nodes)])
+            right-nodes))))))
 
 (defn- parse-expression-nodes
   [& nodes]
-  (cond-> (mapv parse-expression-node nodes)
-    (== 1 (count nodes))
-    first))
+  (apply parse-expression-nodes-binary-bin nodes))
 
 (defn- parse-comma-separated-expression-nodes
+  "Handles parts of `from`, `group by` and `order by`"
   [& nodes]
-  (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
-    (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
-    (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
-    (map #(apply parse-expression-nodes %))))
+  (let [results
+        (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
+          (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
+          (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
+          (map #(apply parse-expression-nodes %)))]
+    (cond-> results
+      (not (next results)) first)))
+
+(defn- parse-comma-separated-expression-nodes-by
+  "Handles `group by` and `order by`"
+  [& nodes]
+  (apply parse-comma-separated-expression-nodes nodes))
+
+(defn- parse-comma-separated-expression-nodes-from
+  "Handles `from`"
+  [& nodes]
+ (map parse-comma-separated-expression-nodes nodes))
 
 (defn- parse-field-definition
   [{:keys [nodes] :as fd-node}]
@@ -137,9 +274,12 @@
   (cond (re-find #"join" (name clause-kw))
         (assoc-parsed-join q clause-kw nodes)
 
-        (re-find #"from|order|group" (name clause-kw)) ; comma-separated expressions
+        (re-find #"from" (name clause-kw)) ; comma-separated expressions
         (assoc q clause-kw
-          (apply parse-comma-separated-expression-nodes nodes))
+          (apply parse-comma-separated-expression-nodes-from nodes))
+        (re-find #"order|group" (name clause-kw)) ; comma-separated expressions
+        (assoc q clause-kw
+          (apply parse-comma-separated-expression-nodes-by nodes))
 
         (re-find #"where|having" (name clause-kw)) ; expression
         (assoc q clause-kw
@@ -164,8 +304,6 @@
                   (string/replace #" " "-")
                   string/lower-case
                   keyword)]
-          (prn 'assoc-clause clause-kw :key-nodes key-nodes)
-          (prn 'assoc-clause :val-nodes val-nodes)
           ;q #_
           (assoc-parsed-clause q clause-kw val-nodes)))
       {}
@@ -269,10 +407,6 @@
                    :default %))
       ast-nodes)))
 
-(defn- unwrap-string
-  [wrapped-string]
-  (string/replace wrapped-string #"[\"']" ""))
-
 (defn- summary-string
   [dom]
   (with-out-str
@@ -367,7 +501,7 @@
            ;(= type :select)                              parse-selects
            :default                                      (do (prn 'transcode-honey type sub-type) identity)))
     summary-string
-    (str "\r\n\r\n---------------- Before -----------------\r\n\r\n" (if false (with-out-str (pprint/pprint clean-node)) (pr-str clean-node)) "\r\n\r\n----------------AFTER -----------------\r\n\r\n"))))
+    (str "\r\n\r\n; ---------------- Before -----------------\r\n\r\n" (if false (with-out-str (pprint/pprint clean-node)) (pr-str clean-node)) "\r\n\r\n; ----------------AFTER -----------------\r\n\r\n"))))
 
 (defn tokenize-and-honeyize
   [sql options]

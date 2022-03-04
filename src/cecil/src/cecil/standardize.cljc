@@ -131,6 +131,7 @@
       (re-find #"^'" s)                      :string-single
       (re-find #"^\"" s)                     :string-double
       (= "||" s)                             :concatenation
+      (re-find #"[<>]+=?" s)                 :inequality
       (re-find #"^\d" s)                     :number)))
 
 (defn canonical-keyword
