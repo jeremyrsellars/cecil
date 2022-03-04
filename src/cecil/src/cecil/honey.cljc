@@ -492,6 +492,9 @@
                       ; (apply parse-field-definition nodes)
 
 
+                      (= type :comment)
+                      (list* 'comment (->> x flatten-tokens (map (fn de-comment [s] (string/replace s #"(?m)^/\*[\u0020]?|[\u0020]?\*/$|^[\u0020]*--[\u0020]?" "")))))
+
                       :default
                       (do (prn x)
                         (dissoc x :indent :absolute-indent :own-line? :leading-whitespace)))]
