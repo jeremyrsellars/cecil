@@ -325,10 +325,14 @@
                (parse-from-etc q1-from))]
     (if (empty? set-op)
       query
-      (let [set-op-kw (->> set-op flatten-tokens (string/join "-") keyword)]
-        {;:set-op_rest set-op_rest
-         ;:-rest -rest
-         set-op-kw [query (parse-selects {:type ::additional-select :nodes -rest})]}))))
+      (let [set-op-kw (->> set-op flatten-tokens (string/join "-") keyword)
+            query2 (parse-selects (if (next -rest)
+                                    {:type ::additional-select :nodes -rest}
+                                    (first -rest)))
+            query2-same-set-type (get query2 set-op-kw)]
+        (if-not query2-same-set-type
+          {set-op-kw [query query2]}
+          {set-op-kw (into [query] query2-same-set-type)})))))
 
 
 ; (defn flatten-selects-expr

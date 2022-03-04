@@ -23,7 +23,7 @@
         "connected constant constraint crash create current currval cursor "
         "data_base database date dba deallocate debugoff debugon decimal declare default definition delay delete "
         "desc digits dispose distinct do drop "
-        "else elsif enable end entry escape exception exception_init exchange exclusive exists exit external "
+        "else elsif enable end entry escape except exception exception_init exchange exclusive exists exit external "
         "fast fetch file for force form from function "
         "generic goto grant group "
         "having "
@@ -49,7 +49,7 @@
   (->>
      (string/split keywords #"\s+")
      (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join"
-            "union all" "union")
+            "union all" "union" "except")
      (map clojure.core/keyword)
      (into #{})))
 
@@ -133,6 +133,25 @@
       (= "||" s)                             :concatenation
       (re-find #"[<>]+=?" s)                 :inequality
       (re-find #"^\d" s)                     :number)))
+
+(defn flatten-tokens-keep-whitespace
+  [node]
+  (->> node
+    (walk/postwalk
+      (fn transcode-walk
+        [x]
+        (if-let [nodes (:nodes x)]
+          (keep identity [nodes (:leading-whitespace x) (:following-comment x)])
+          x)))
+    flatten))
+
+(defn token-of-keyword?
+ ([n kw]
+  (= kw (:keyword n)))
+ ([{:keys [keyword]} kw & keywords]
+  (or (= kw keyword)
+      (some #(= keyword %) keywords)
+      false)))
 
 (defn canonical-keyword
   [s]
@@ -590,6 +609,31 @@
                (dissoc node :following-comment :leading-whitespace)]))
           nodes)))))
 
+(defn parse-from-etc-for-set-ops
+  "Parsing for the possibility of union*/except in {:nodes[from x ... union ...]}
+  Searches the tokens (counting parenthetical depth) for a :select token;
+  if found, calls parse-select (indirect recursion),
+  returning (let [[select-node remaining-tokens](parse-select remaining-tokens)]
+               [[... select-node] remaining-tokens])
+  Returns value equivalent to [from-etc nil] when there aren't any set operations (of additional select expressions)."
+  [from-etc-node]
+  (loop [depth 0
+         ts (seq (:nodes from-etc-node))
+         new-from-etc []]
+    (if-not ts
+      [(assoc from-etc-node :nodes new-from-etc) ; node
+       nil]                                      ; remaining tokens
+      (let [t (first ts)]
+        (cond
+          (and (zero? depth) (token-of-keyword? t :select))
+          (let [[select-node remaining-tokens] (parse-select (flatten-tokens-keep-whitespace ts))]
+            [(assoc from-etc-node :nodes (conj new-from-etc select-node)) ; node
+             remaining-tokens])                                           ; remaining tokens
+
+          (token-of-type? t :lparen)     (recur (inc depth) (next ts) (conj new-from-etc t))
+          (token-of-type? t :rparen)     (recur (dec depth) (next ts) (conj new-from-etc t))
+          :default                       (recur depth (next ts) (conj new-from-etc t)))))))
+
 (defn parse-select
   [tokens]
   (let [[kw tokens] (next-token tokens)
@@ -625,6 +669,7 @@
                             is-top-level?
                             (or is-top-level? is-same-line?)
                             (conj new-nodes new-node))))))
+        [from-etc2 more-remaining] (parse-from-etc-for-set-ops (assert-ast-node from-etc))
         select-list
         {:type :select-list
          :nodes (assert-ast-nodes select-list-parsed)}]
@@ -635,8 +680,9 @@
                  [(remove-leading-whitespace-in-first-node kw)
                   distinct
                   select-list
-                  (assert-ast-node from-etc)]))}
-      remaining])))
+                  (assert-ast-node from-etc2)]))} ; maybe parse additional select expressions here
+      (cond->> remaining
+        (seq more-remaining) (concat more-remaining))])))
 
 (defn parse-with
   [tokens]
