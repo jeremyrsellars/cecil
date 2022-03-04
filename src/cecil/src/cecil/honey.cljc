@@ -28,9 +28,13 @@
   (and (= type-kw type)
        (= sub-type-kw sub-type))))
 
+(def binary-operator-token-nodes
+  (into #{} (map vector) ["*" "/" "||" "+" "-" "in" "IN" "In" "iN"]))
+
 (defn binary-operator-token?
   [n]
-  (token-of-type? n :equals :not-equals :inequality :not-compare))
+  (or (token-of-type? n :equals :not-equals :inequality :not-compare)
+      (contains? binary-operator-token-nodes (:nodes n))))
 
 (defn- combine-keywords
   [kw-nodes]
@@ -65,7 +69,14 @@
 (defn- raw
   [{:keys [nodes] :as node}]
  ;{'parse-identifier-kw node :result
-  (->> node flatten-tokens (string/join " ")
+  (->> node
+    (walk/prewalk #(do
+                    (prn 'walking %)
+                    (cond (token-of-type? % :string-double) (pr-str (util/unwrap-string-double (first (:nodes %))))
+                          (token-of-type? % :string-single) (pr-str (util/unwrap-string-single (first (:nodes %))))
+                         :default %)))
+    flatten-tokens
+    (string/join " ")
     (vector :raw)))
 
 (declare parse-selects)
@@ -113,8 +124,11 @@
     (if (every? #(token-of-type? % :select) nodes)
       (cond-> (map parse-selects nodes)
         (= 1 (count nodes)) first) ; unwrap when there's only one node, especially `(select...)`
-      (raw {:type :expression
-            :nodes [node]}))))
+      (->> nodes
+           (partition-by #(token-of-type? % :comma))
+           (remove #(token-of-type? (first %) :comma))
+           (mapv #(cond-> (mapv parse-expression-node %)
+                    (not (next %)) first))))))
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
   [node]
@@ -149,7 +163,7 @@
           (let [left-expr
                 (when (and (coll? left-nodes) (seq left-nodes))
                   (prn 'parse-expression-nodes-binary-eq left-nodes)
-                  (apply parse-expression-nodes-binary-eq left-nodes))]
+                  (apply parse-expression-nodes-inner left-nodes))]
            (cond (and (vector? result-expr)
                       (vector? left-expr)
                       (= (first result-expr) (first left-expr)))
