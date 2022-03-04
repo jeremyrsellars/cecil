@@ -434,16 +434,19 @@
     (println)
     (pprint/pprint dom)))
 
+(defn- clean-node
+  [ast-node]
+  (walk/postwalk
+    (fn remove-whitespace-meta [x]
+      (cond-> x
+        (map? x)
+        (dissoc x :indent :absolute-indent :own-line? #_:leading-whitespace)))
+    ast-node))
+
 (defn- transcode-honey
   [{:keys [type sub-type] :as ast-node}]
- (let [clean-node
-       (walk/postwalk
-          (fn remove-whitespace-meta [x]
-            (cond-> x
-              (map? x)
-              (dissoc x :indent :absolute-indent :own-line? #_:leading-whitespace)))
-          ast-node)]
-  (->> clean-node
+ (let [cleaned-node (clean-node ast-node)]
+  (->> cleaned-node
      ; (prewalk-ancestry indention-walker-first-pass '())
      ; (walk/postwalk indention-walker-second-pass)
 
@@ -519,21 +522,31 @@
             (prn ::x x '=> replacement)
             replacement))))
     ((cond (and (= type :expression) (= sub-type :with)) parse-with
-           ;(= type :select)                              parse-selects
-           :default                                      (do (prn 'transcode-honey type sub-type) identity)))
+           :default                                      (do (prn 'transcode-honey type sub-type) identity))))))
+
+(defn- transcode-honey-summary
+  [ast-node]
+ (let [cleaned-node (clean-node ast-node)]
+  (->> (transcode-honey cleaned-node)
     summary-string
-    (str "\r\n\r\n; ---------------- Before -----------------\r\n\r\n" (if false (with-out-str (pprint/pprint clean-node)) (pr-str clean-node)) "\r\n\r\n; ----------------AFTER -----------------\r\n\r\n"))))
+    (str "\r\n\r\n; ---------------- Before -----------------\r\n\r\n"
+         (if false (with-out-str (pprint/pprint cleaned-node)) (pr-str cleaned-node))
+         "\r\n\r\n; ----------------AFTER -----------------\r\n\r\n"))))
+
+(defn convert
+  "Parses the specified SQL string, converts to a honeySQL AST, and returns in the form of
+  [ast remaining]"
+  [sql options]
+  (-> sql
+      string/trim
+      standardize/tokenize-and-parse
+      (standardize/standardize options)
+      transcode-honey))
 
 (defn tokenize-and-honeyize
   [sql options]
-  (let [[ast remaining]
-        (-> sql
-            string/trim
-            standardize/tokenize-and-parse
-            (standardize/standardize options))]
-    ;(prn 'tokenize-and-honeyize :ast ast)
-
-    (cond-> (transcode-honey ast)
+  (let [[ast remaining](convert sql options)]
+    (cond-> (transcode-honey-summary ast)
       (seq remaining)
       (str "\r\n\r\n-------- Remaining (extra or bug?) ------------\r\n"
            (with-out-str (pprint/pprint remaining))))))

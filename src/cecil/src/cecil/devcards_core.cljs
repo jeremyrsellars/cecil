@@ -10,6 +10,7 @@
    [cecil.ccl-to-sql :as cts]
    [cecil.ccl-to-sql-test]
    [cecil.cki-test]
+   [cecil.honey-test]
    [cecil.reflow-test]
    [cecil.standardize-test]
    [cecil.util-test]
