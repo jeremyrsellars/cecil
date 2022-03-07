@@ -149,22 +149,35 @@
   [node]
   (let [child-nodes-without-parens (-> (:nodes node) rest butlast)]
     (if (every? #(token-of-type? % :expression) child-nodes-without-parens)
-      (cond-> (map parse-expression-node child-nodes-without-parens)
-        (= 1 (count child-nodes-without-parens)) first) ; unwrap when there's only one node, especially `(select...)`
+      (cond-> (mapv parse-expression-node child-nodes-without-parens)
+        (== 1 (count child-nodes-without-parens)) first) ; unwrap when there's only one node, especially `(select...)`
       (raw {:type :expression
             :nodes [node]}))))
 
 (defmethod parse-expression-node {:type :expression, :sub-type :parenthetical-indent}
   [{:keys [nodes] :as node}]
-  (let [child-nodes-without-parens (-> (:nodes node) rest butlast)]
-    (if (every? #(token-of-type? % :select) nodes)
-      (cond-> (map parse-selects nodes)
-        (= 1 (count nodes)) first) ; unwrap when there's only one node, especially `(select...)`
-      (->> nodes
-           (partition-by #(token-of-type? % :comma))
-           (remove #(token-of-type? (first %) :comma))
-           (mapv #(cond-> (mapv parse-expression-node %)
-                    (not (next %)) first))))))
+  (let []
+    (cond (every? #(token-of-type? % :select) nodes)
+          (cond-> (map parse-selects nodes)
+            (== 1 (count :parenthetical-indent)) first) ; unwrap when there's only one node, especially `(select...)`
+
+          (some #(token-of-type? % :comma) nodes)
+          (do
+           (console-warn "If you see this, please comment the circumstance under which it is required." node)
+           (->> nodes
+               (partition-by #(token-of-type? % :comma))
+               (remove #(token-of-type? (first %) :comma))
+               (mapv #(cond-> (mapv parse-expression-node %)
+                        (not (next %)) first))))
+
+          :default
+          (cond-> (mapv parse-expression-node nodes)
+            (not (next nodes)) first)))) ; unwrap
+
+(defmethod parse-expression-node {:type :expression}
+  [{:keys [nodes] :as node}]
+  (console-trace 'parse-expression-node :expression :count (count nodes) :nodes nodes #_#_:result (apply parse-expression-nodes nodes))
+  (apply parse-expression-nodes nodes))
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
   [node]

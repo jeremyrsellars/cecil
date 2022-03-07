@@ -182,4 +182,15 @@
                   [:inline "111"]
                   [:inline "222"]]})
 
+     (test-convert "where between expressions"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.STATUS_CD between (111 + 0) and (222 + 0)"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:between
+                  :R.STATUS_CD
+                  [:+ [:inline "111"] [:inline "0"]]
+                  [:+ [:inline "222"] [:inline "0"]]]})
+
      #_:end))
