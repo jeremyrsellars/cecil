@@ -17,8 +17,8 @@
                  [cljsjs/react-dom "16.8.1-0"]
                  [cljsjs/react-dom-server "16.8.1-0"]
                  #_[org.omcljs/om "1.0.0-alpha46"]
-                 #_[reagent "0.6.0"]
-                 ]
+                 #_[reagent "0.6.0"]]
+
 
   :plugins [[lein-figwheel "0.5.18"]
             [lein-cljsbuild "1.1.5" :exclusions [org.clojure/clojure]]]
@@ -43,7 +43,8 @@
                                     :asset-path "js/compiled/devcards_out"
                                     :output-to  "resources/public/js/compiled/cecil_devcards.js"
                                     :output-dir "resources/public/js/compiled/devcards_out"
-                                    :source-map-timestamp true }}
+                                    :preloads [devtools.preload]
+                                    :source-map-timestamp true}}
                        {:id "dev"
                         :source-paths ["src"]
                         :figwheel true
@@ -51,7 +52,8 @@
                                    :asset-path "js/compiled/out"
                                    :output-to  "resources/public/js/compiled/cecil.js"
                                    :output-dir "resources/public/js/compiled/out"
-                                   :source-map-timestamp true }}
+                                   :preloads [devtools.preload]
+                                   :source-map-timestamp true}}
                        {:id "release"
                         :source-paths ["src"]
                         :compiler {:main       "cecil.core"
@@ -62,7 +64,7 @@
   :figwheel { :css-dirs ["resources/public/css"]
               :server-port 3469}
 
-  :profiles {:dev {:dependencies [[binaryage/devtools "0.9.10"]
+  :profiles {:dev {:dependencies [[binaryage/devtools "1.0.5"]
                                   [figwheel-sidecar "0.5.18"]
                                   [com.cemerick/piggieback "0.2.2"]]
                    ;; need to add dev source path here to get user.clj loaded
