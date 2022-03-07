@@ -151,7 +151,9 @@
 
 (defn- parse-expression-nodes-inner
   [& nodes]
-  (mapv parse-expression-node nodes))
+  (if (next nodes)
+    (mapv parse-expression-node nodes)
+    (parse-expression-node (first nodes))))
 
 (defn- parse-expression-nodes-binary-eq
   [& nodes]

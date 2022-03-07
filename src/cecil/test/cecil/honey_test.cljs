@@ -120,13 +120,13 @@
            [[:feline :cat]]})
 
      (test-convert "where & order by"
-       "select r.* from re r where r.r > 1 order by r.a, r.b"
+       "select r.* from re r where r.r > 9879823 order by r.a, r.b"
        {:select
           [:r.*]
         :from
           [[:re :r]]
         :where
-           [:> :r.r [[:inline "1"]]] ; To-do: unwrap
+           [:> :r.r [:inline "9879823"]]
         :order-by
           [:r.a
            :r.b]})
@@ -168,5 +168,5 @@
        {:select [:R.RCPT_ID :R.RCPT_NUM]
         :from [[:RCPT :R]]
         :where  [:and
-                  [:= :R.BILL_STATUS_CD [[:inline "111"]]]
-                  [:= :R.BILL_STATUS_REASON_CD [[:inline "123123"]]]]})))
+                  [:= :R.BILL_STATUS_CD [:inline "111"]]
+                  [:= :R.BILL_STATUS_REASON_CD [:inline "123123"]]]})))
