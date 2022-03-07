@@ -163,10 +163,23 @@
      (test-convert
        "   SELECT R.RCPT_ID, R.RCPT_NUM
       FROM RCPT R
-      WHERE R.BILL_STATUS_CD = 111
-         AND R.BILL_STATUS_REASON_CD = 123123"
+      WHERE R.STATUS_ID = 111
+         AND R.REASON_CD = 123123"
        {:select [:R.RCPT_ID :R.RCPT_NUM]
         :from [[:RCPT :R]]
         :where  [:and
-                  [:= :R.BILL_STATUS_CD [:inline "111"]]
-                  [:= :R.BILL_STATUS_REASON_CD [:inline "123123"]]]})))
+                  [:= :R.STATUS_ID [:inline "111"]]
+                  [:= :R.REASON_CD [:inline "123123"]]]})
+
+     (test-convert "where between numbers"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.STATUS_CD between 111 and 222"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:between
+                  :R.STATUS_CD
+                  [:inline "111"]
+                  [:inline "222"]]})
+
+     #_:end))

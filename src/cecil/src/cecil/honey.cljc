@@ -90,7 +90,33 @@
     (string/join " ")
     (vector :raw)))
 
-(declare parse-selects)
+(declare
+  parse-expression-nodes
+  parse-selects)
+
+(defn- paren-matching-split-with
+  [pred nodes]
+  (split-with pred nodes))
+
+(defn parse-expression-until
+  [take-while-pred nodes]
+  (console-log 'parse-expression-until 1 'take-while-pred nodes)
+  (console-log 'parse-expression-until 2 (paren-matching-split-with (complement take-while-pred) nodes))
+  (let [[expr-nodes rst] (paren-matching-split-with (complement take-while-pred) nodes)]
+    [(apply parse-expression-nodes expr-nodes)
+     rst]))
+
+(defmulti parse-ternary (fn parse-ternary_dispatch [left-expr op-kw right-nodes] op-kw))
+  ; [ternary-expr remaining-right-nodes]
+
+(defmethod parse-ternary :between
+  [left-expr op-kw after-op-nodes]
+  (console-log 'parse-ternary left-expr op-kw after-op-nodes)
+  (let [[a and-b-rest] (parse-expression-until #(token-of-keyword? % :and) after-op-nodes)
+        b-rest (rest and-b-rest)
+        [b after-b-nodes] (parse-expression-until #(token-of-keyword? % :and :or) b-rest)]
+    [[:between left-expr a b]
+     after-b-nodes]))
 
 (defmulti parse-expression-node
   (fn parse-expression-node_dispatch [node]
@@ -207,6 +233,8 @@
     :more
     (loop [result-expr nil  ; or should this be nil and check for it below?
            nodes nodes]
+     (if (empty? nodes)
+      result-expr
       (let [[left-nodes [op & right-nodes]]
             (split-with
               (complement
@@ -214,16 +242,26 @@
                      (apply token-of-keyword? % :or :and ternary-operator-kws)))  ; cheating to save time and future-proof tokenization
               nodes)]
         (if-not op
-          (let [left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
-           (cond->> left-expr
+          (let [;_ (console-log 'parse-expression-nodes-binary-bin :result result-expr :loop 1 :left-expr (apply parse-expression-nodes-binary-eq left-nodes))
+                left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
+            (cond->> left-expr
               result-expr (conj result-expr)))
-          (let [op-kw (:keyword op)
+          (if-let [op-kw (ternary-operator-kws (:keyword op))]
+            (let [_ (console-log 'parse-expression-nodes-binary-bin :result result-expr 'ternary op-kw :loop 21)
+                  left-expr (apply parse-expression-nodes-binary-bin left-nodes)
+                  [ternary-expr new-right-nodes] (parse-ternary left-expr op-kw right-nodes)]
+             (console-log 'parse-expression-nodes-binary-bin 'ternary op-kw 'ternary-expr ternary-expr 'result-expr result-expr new-right-nodes)
+             (recur
+              (cond->> ternary-expr
+                result-expr (conj result-expr))
+              new-right-nodes))
+           (let[_ (console-log 'parse-expression-nodes-binary-bin :result result-expr :loop 22)
                 additional-expr (apply parse-expression-nodes-binary-bin left-nodes)]
             (recur
               [(parse-operator-kw op)
                (cond->> additional-expr
                  result-expr (conj result-expr))]
-              right-nodes)))))))
+              right-nodes)))))))))
 
 (defn- parse-expression-nodes
   [& nodes]
@@ -236,7 +274,7 @@
         (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
           (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
           (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
-          (map #(apply parse-expression-nodes %)))]
+          (mapv #(apply parse-expression-nodes %)))]
     results))
 
 (defn- parse-comma-separated-expression-nodes-by
