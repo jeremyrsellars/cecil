@@ -44,35 +44,89 @@
                     (is (nil? extra)
                      "Extra in actual"))))))]
 
-      (test-convert "1 field"
-        "select cat.cat_id from feline cat"
-         {:select
-           [:cat.cat_id]
-          :from [:feline :cat]})
+     (test-convert "dual - unqualified field no alias"
+        "select dummy from dual"
+        {:select [:dummy]
+         :from [:dual]})
 
-      (test-convert "2 tables"
-        "select 1 from Apple a, Bee b"
+     (test-convert "dual - unqualified field w/ alias"
+        "select dummy x from dual"
+        {:select [[:dummy :x]]
+         :from [:dual]})
+
+     (test-convert "dual - unqualified field as alias"
+        "select dummy as x from dual"
+         {:select [[:dummy :x]]
+          :from [:dual]})
+
+     (test-convert "dual - qualified field no alias"
+        "select dual.dummy from dual"
+         {:select [:dual.dummy]
+          :from [:dual]})
+
+     (test-convert "dual - qualified field w/ alias"
+        "select dual.dummy x from dual"
+         {:select [[:dual.dummy :x]]
+          :from [:dual]})
+
+     (test-convert "dual - qualified field as alias"
+        "select dual.dummy as x from dual"
+         {:select [[:dual.dummy :x]]
+          :from [:dual]})
+
+     (test-convert "1 number field w/ alias"
+        "select 1 as one from dual"
         {:select
-           [[[:raw "1"] :1]]
-         :from [[:Apple :a]
-                [:Bee :b]]})
+           [[[:inline "1"] :one]]
+         :from [:dual]})
 
-      (test-convert "2 fields"
+     (test-convert "dual - qualified table, qualified field no alias"
+        "select d.dummy from dual d"
+         {:select [:d.dummy]
+          :from [[:dual :d]]})
+
+     (test-convert "dual - qualified table, qualified field w/ alias"
+        "select d.dummy x from dual d"
+         {:select [[:d.dummy :x]]
+          :from [[:dual :d]]})
+
+     (test-convert "dual - qualified table, qualified field w/ as alias"
+        "select d.dummy as x from dual d"
+         {:select [[:d.dummy :x]]
+          :from [[:dual :d]]})
+
+     (test-convert "2 tables w/ aliases"
+        "select a.dummy as a, b.dummy b from dual a, dual b"
+        {:select
+           [[:a.dummy :a]
+            [:b.dummy :b]]
+         :from [[:dual :a]
+                [:dual :b]]})
+
+     (test-convert "2 tables w/ aliases"
+        "select a.dummy as a, b.dummy b from apple a, banana b"
+        {:select
+           [[:a.dummy :a]
+            [:b.dummy :b]]
+         :from [[:apple :a]
+                [:banana :b]]})
+
+     (test-convert "2 fields"
         "select cat.cat_id,cat.cat_id as ITEM_PRIMARY from feline cat"
         {:select
            [:cat.cat_id
             [:cat.cat_id :ITEM_PRIMARY]]
          :from
-           [:feline :cat]})
+           [[:feline :cat]]})
 
      (test-convert "where & order by"
        "select r.* from re r where r.r > 1 order by r.a, r.b"
        {:select
           [:r.*]
         :from
-          [:re :r]
+          [[:re :r]]
         :where
-           [:> :r.r [[:raw "1"]]] ; To-do: unwrap
+           [:> :r.r [[:inline "1"]]] ; To-do: unwrap
         :order-by
           [:r.a
            :r.b]})
@@ -83,13 +137,13 @@
         item_id,
         /*block
           comment*/
-        item_id from order_cat_item_r ocir"
+        item_id from cat_item ci"
         {;'(comment "leading comment")
          :select-distinct ;trailing comment"
            [:item_id
             '(comment "block\n          comment")
             :item_id]
-         :from [:order_cat_item_r :ocir]})
+         :from [[:cat_item :ci]]})
 
      (test-convert
         "-- leading comment
@@ -97,22 +151,22 @@
         item_id,
         /*block
           comment*/
-        item_id from order_cat_item_r ocir"
+        item_id from cat_item ci"
         {;"-- leading comment"
          :select-distinct ;--trailing comment
           [:item_id
            '(comment "block\n          comment")
            :item_id]
          :from
-           [:order_cat_item_r :ocir]})
+           [[:cat_item :ci]]})
 
      (test-convert
-       "   SELECT BR.BILL_NBR_DISP, BR.BILL_VRSN_NBR
-      FROM BILL_REC BR
-      WHERE BR.BILL_STATUS_CD = 111
-         AND BR.BILL_STATUS_REASON_CD = 123123"
-       {:select [:BR.BILL_NBR_DISP :BR.BILL_VRSN_NBR]
-        :from [:BILL_REC :BR]
+       "   SELECT R.RCPT_ID, R.RCPT_NUM
+      FROM RCPT R
+      WHERE R.BILL_STATUS_CD = 111
+         AND R.BILL_STATUS_REASON_CD = 123123"
+       {:select [:R.RCPT_ID :R.RCPT_NUM]
+        :from [[:RCPT :R]]
         :where  [:and
-                  [:= :BR.BILL_STATUS_CD [[:raw "111"]]]
-                  [:= :BR.BILL_STATUS_REASON_CD [[:raw "123123"]]]]})))
+                  [:= :R.BILL_STATUS_CD [[:inline "111"]]]
+                  [:= :R.BILL_STATUS_REASON_CD [[:inline "123123"]]]]})))

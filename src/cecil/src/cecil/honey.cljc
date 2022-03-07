@@ -7,6 +7,16 @@
             [cecil.standardize :as standardize]
             [cecil.util :as util]))
 
+(defn console-log
+  [& args]
+  #?(:cljs (apply js/console.log args)))
+(defn console-trace
+  [& args]
+  #?(:cljs (apply js/console.trace args)))
+(defn console-warn
+  [& args]
+  #?(:cljs (apply js/console.warn args)))
+
 (defn token-of-type?
  ([n kw]
   (= kw (:type n)))
@@ -27,6 +37,9 @@
  ([{:keys [type sub-type]} type-kw sub-type-kw]
   (and (= type-kw type)
        (= sub-type-kw sub-type))))
+
+(def ternary-operator-kws
+  #{:between})
 
 (def binary-operator-token-nodes
   (into #{} (map vector) ["*" "/" "||" "+" "-" "in" "IN" "In" "iN"]))
@@ -70,11 +83,9 @@
   [{:keys [nodes] :as node}]
  ;{'parse-identifier-kw node :result
   (->> node
-    (walk/prewalk #(do
-                    (prn 'walking %)
-                    (cond (token-of-type? % :string-double) (pr-str (util/unwrap-string-double (first (:nodes %))))
-                          (token-of-type? % :string-single) (pr-str (util/unwrap-string-single (first (:nodes %))))
-                         :default %)))
+    (walk/prewalk #(cond (token-of-type? % :string-double) (pr-str (util/unwrap-string-double (first (:nodes %))))
+                         (token-of-type? % :string-single) (pr-str (util/unwrap-string-single (first (:nodes %))))
+                         :default %))
     flatten-tokens
     (string/join " ")
     (vector :raw)))
@@ -106,8 +117,7 @@
 
 (defmethod parse-expression-node {:type :number}
   [node]
-  (raw {:type :expression
-        :nodes [node]}))
+  (into [:inline] (:nodes node)))
 
 (defmethod parse-expression-node {:type :expression, :sub-type :parenthetical}
   [node]
@@ -178,11 +188,6 @@
                 left-parsed (when (seq left-nodes) (apply parse-expression-nodes-binary-eq left-nodes))]
             (recur
               (cond
-                (and (vector? result-expr)
-                     (vector? left-parsed)
-                     (= (first result-expr) (first left-parsed)))
-                [{'ardant5 (into expr (into result-expr left-parsed))}]
-
                 result-expr          (into expr (into result-expr left-parsed))
                 left-parsed          (conj expr left-parsed)
                 :default             expr)
@@ -204,22 +209,19 @@
             (split-with
               (complement
                 #(or (token-of-type? %    :or :and)
-                     (token-of-keyword? % :or :and)))  ; cheating to save time and future-proof tokenization
+                     (apply token-of-keyword? % :or :and ternary-operator-kws)))  ; cheating to save time and future-proof tokenization
               nodes)]
         (if-not op
-          (let [_ (prn 'parse-expression-nodes-binary-bin nodes)
-                left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
-            (prn 'ardant9 left-expr result-expr)
+          (let [left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
            (cond->> left-expr
               result-expr (conj result-expr)))
-          (recur
-            (if result-expr
+          (let [op-kw (:keyword op)
+                additional-expr (apply parse-expression-nodes-binary-bin left-nodes)]
+            (recur
               [(parse-operator-kw op)
-               (conj result-expr
-                     (apply parse-expression-nodes-binary-bin left-nodes))]
-              [(parse-operator-kw op)
-               (apply parse-expression-nodes-binary-bin left-nodes)])
-            right-nodes))))))
+               (cond->> additional-expr
+                 result-expr (conj result-expr))]
+              right-nodes)))))))
 
 (defn- parse-expression-nodes
   [& nodes]
@@ -233,29 +235,60 @@
           (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
           (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
           (map #(apply parse-expression-nodes %)))]
-    (cond-> results
-      (not (next results)) first)))
+    results))
 
 (defn- parse-comma-separated-expression-nodes-by
   "Handles `group by` and `order by`"
   [& nodes]
   (apply parse-comma-separated-expression-nodes nodes))
 
+(defn- parse-from-table-expression-nodes
+  "Handles `dual`, `dual d`, `(select 1 from dual) d`, etc."
+  [& nodes]
+  (case (count nodes)
+    1 (parse-expression-node (first nodes))
+    2 [(parse-expression-node (first nodes)) (parse-expression-node (second nodes))]
+      (do
+        (console-warn "Unexpected node count in table expression expected table name or (select...), optionally followed by alias." 'parse-from-table-expression-nodes nodes)
+        (mapv parse-expression-node nodes))))
+
 (defn- parse-comma-separated-expression-nodes-from
   "Handles `from`"
   [& nodes]
- (map parse-comma-separated-expression-nodes nodes))
+  (let [results
+        (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
+             (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
+             (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
+             (map #(apply parse-from-table-expression-nodes %)))]
+    results))
 
 (defn- parse-field-definition
+  "Parses a {:type :field-definition} node, including optional 'as' alias.
+  In PL/SQL, `AS` is optional in a result column definition (`select 1 AS x, 2 y`).
+  Table name alias doesn't allow `AS` (`from dual ~~AS~~ x`)."
   [{:keys [nodes] :as fd-node}]
   (if (token-of-type? fd-node :identifier)
     (parse-expression-node fd-node)
-    (let [[expr as alias] (partition-by #(token-of-keyword? % :as) nodes)]
-      (cond-> (apply parse-expression-nodes expr)
-        true ;(not-any? #(= "*" %) (flatten-tokens expr)) ; what was this for?  It broke `count(*) as whatever`
-        (vector
-          (parse-identifier-kw
-            (or (first alias) fd-node)))))))
+
+    (if-let [[expr as alias] ; check for `field AS alias`
+             (as-> (partition-by #(token-of-keyword? % :as) nodes) expr-as-alias
+               (if (and (= 3 (count expr-as-alias)) (= 1 (count (last expr-as-alias) #_alias)))
+                 expr-as-alias))]
+      ; `expr AS alias` => [(parse expr) :alias]
+      [(apply parse-expression-nodes expr)
+       (parse-identifier-kw (first alias))]
+
+      (if-let [[expr alias] ; check for `field alias`
+               (if (and (= 2 (count nodes))
+                        (as-> (nth nodes 1) alias
+                              (= [:identifier nil] ((juxt :type :sub-type) alias))))
+                 nodes)]
+        ; `expr AS alias` => [(parse expr) :alias]
+        (do
+          (map parse-expression-nodes nodes))
+
+        (do
+          (apply parse-expression-nodes nodes))))))
 
 (defn- parse-select-list
   [{:keys [nodes]}]
@@ -402,11 +435,10 @@
   [& nodes]
   (prn :parse-function-invocation nodes)
  (let [[fn-ident [lparen args rparen]] nodes]
-  (prn :parse-function-invocation fn-ident :args args)
   (into [fn-ident]
     (keep #(cond (= ::comma %)              nil
                  :default %))
-    args)));(-> args rest butlast))))
+    args)))
 
 (defn- parse-parenthetical-expression
   [& [n1 n2 :as ast-nodes]]
