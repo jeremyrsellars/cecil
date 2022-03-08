@@ -160,6 +160,7 @@
          :from
            [[:cat_item :ci]]})
 
+     ;; Where
      (test-convert
        "   SELECT R.RCPT_ID, R.RCPT_NUM
       FROM RCPT R
@@ -171,6 +172,27 @@
                   [:= :R.STATUS_ID [:inline 111]]
                   [:= :R.REASON_CD [:inline 123123]]]})
 
+     (test-convert "where = 'singlestring' literal"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.name = 'hi'"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:=
+                  :R.name
+                  [:inline "hi"]]})
+
+     (test-convert "where = \"doublestring\" literal"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.name = 'hi'"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:=
+                  :R.name
+                  [:inline "hi"]]})
+
+     ;; Where Between
      (test-convert "where between numbers"
        "SELECT R.RCPT_ID
       FROM RCPT R

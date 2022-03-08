@@ -129,15 +129,13 @@
   [{:keys [nodes] :as node}]
   (assert (= 1 (count nodes)))
   (let [encoded-string (first nodes)]
-    (raw {:type :expression
-          :nodes [(util/unwrap-string-double encoded-string)]})))
+    [:inline (util/unwrap-string-double encoded-string)]))
 
 (defmethod parse-expression-node {:type :string-single}
   [{:keys [nodes] :as node}]
   (assert (= 1 (count nodes)))
   (let [encoded-string (first nodes)]
-    (raw {:type :expression
-          :nodes [(util/unwrap-string-single encoded-string)]})))
+    [:inline (util/unwrap-string-single encoded-string)]))
 
 (defmethod parse-expression-node {:type :number}
   [{:keys [nodes]}]
