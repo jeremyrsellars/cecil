@@ -193,4 +193,31 @@
                   [:+ [:inline "111"] [:inline "0"]]
                   [:+ [:inline "222"] [:inline "0"]]]})
 
-     #_:end))
+     ;#_
+     (test-convert "where between expressions and another expression"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE 1 = 1 and R.STATUS_CD between 111 + 0 and 222 + 0 and 2 = 2"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where [:and
+                [:and ; to-do: consider flattening and..and
+                  [:= [:inline "1"] [:inline "1"]]
+                  [:between
+                    :R.STATUS_CD
+                    [:+ [:inline "111"] [:inline "0"]]
+                    [:+ [:inline "222"] [:inline "0"]]]]
+                [:= [:inline "2"] [:inline "2"]]]})
+
+     (test-convert "where between select expressions"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.STATUS_CD between (select 111 from dual) and (select 222 from dual)"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:between
+                  :R.STATUS_CD
+                  {:select [[:inline "111"]] :from [:dual]}
+                  {:select [[:inline "222"]] :from [:dual]}]})
+
+     (comment :end)))

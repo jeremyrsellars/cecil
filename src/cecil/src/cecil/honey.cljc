@@ -98,10 +98,8 @@
   [pred nodes]
   (split-with pred nodes))
 
-(defn parse-expression-until
-  [take-while-pred nodes]
-  (console-log 'parse-expression-until 1 'take-while-pred nodes)
-  (console-log 'parse-expression-until 2 (paren-matching-split-with (complement take-while-pred) nodes))
+(defn parse-expression-nodes-until
+  [take-while-pred & nodes]
   (let [[expr-nodes rst] (paren-matching-split-with (complement take-while-pred) nodes)]
     [(apply parse-expression-nodes expr-nodes)
      rst]))
@@ -112,9 +110,9 @@
 (defmethod parse-ternary :between
   [left-expr op-kw after-op-nodes]
   (console-log 'parse-ternary left-expr op-kw after-op-nodes)
-  (let [[a and-b-rest] (parse-expression-until #(token-of-keyword? % :and) after-op-nodes)
+  (let [[a and-b-rest] (apply parse-expression-nodes-until #(token-of-keyword? % :and) after-op-nodes)
         b-rest (rest and-b-rest)
-        [b after-b-nodes] (parse-expression-until #(token-of-keyword? % :and :or) b-rest)]
+        [b after-b-nodes] (apply parse-expression-nodes-until #(token-of-keyword? % :and :or) b-rest)]
     [[:between left-expr a b]
      after-b-nodes]))
 
@@ -159,7 +157,7 @@
   (let []
     (cond (every? #(token-of-type? % :select) nodes)
           (cond-> (map parse-selects nodes)
-            (== 1 (count :parenthetical-indent)) first) ; unwrap when there's only one node, especially `(select...)`
+            (== 1 (count nodes)) first) ; unwrap when there's only one node, especially `(select...)`
 
           (some #(token-of-type? % :comma) nodes)
           (do
@@ -262,14 +260,19 @@
           (if-let [op-kw (ternary-operator-kws (:keyword op))]
             (let [_ (console-log 'parse-expression-nodes-binary-bin :result result-expr 'ternary op-kw :loop 21)
                   left-expr (apply parse-expression-nodes-binary-bin left-nodes)
-                  [ternary-expr new-right-nodes] (parse-ternary left-expr op-kw right-nodes)]
-             (console-log 'parse-expression-nodes-binary-bin 'ternary op-kw 'ternary-expr ternary-expr 'result-expr result-expr new-right-nodes)
-             (recur
-              (cond->> ternary-expr
-                result-expr (conj result-expr))
-              new-right-nodes))
-           (let[_ (console-log 'parse-expression-nodes-binary-bin :result result-expr :loop 22)
-                additional-expr (apply parse-expression-nodes-binary-bin left-nodes)]
+                  [ternary-expr new-right-nodes] (parse-ternary left-expr op-kw right-nodes)
+                  [next-op & next-right-nodes] new-right-nodes]
+              (if (:keyword next-op)
+                (recur
+                  [(parse-operator-kw next-op)
+                   (cond->> ternary-expr
+                     result-expr (conj result-expr))]
+                  next-right-nodes)
+                (recur
+                  (cond->> ternary-expr
+                    result-expr (conj result-expr))
+                  new-right-nodes)))
+           (let [additional-expr (apply parse-expression-nodes-binary-bin left-nodes)]
             (recur
               [(parse-operator-kw op)
                (cond->> additional-expr
@@ -320,7 +323,7 @@
   In PL/SQL, `AS` is optional in a result column definition (`select 1 AS x, 2 y`).
   Table name alias doesn't allow `AS` (`from dual ~~AS~~ x`)."
   [{:keys [nodes] :as fd-node}]
-  (if (token-of-type? fd-node :identifier)
+  (if (token-of-type? fd-node :identifier :number)
     (parse-expression-node fd-node)
 
     (if-let [[expr as alias] ; check for `field AS alias`
