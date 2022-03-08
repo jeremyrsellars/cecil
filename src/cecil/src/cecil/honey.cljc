@@ -140,8 +140,15 @@
           :nodes [(util/unwrap-string-single encoded-string)]})))
 
 (defmethod parse-expression-node {:type :number}
-  [node]
-  (into [:inline] (:nodes node)))
+  [{:keys [nodes]}]
+  (if-let [num-string (as-> (and (== 1 (count nodes)) (first nodes)) only-node
+                        (and (string? only-node) only-node))]
+    (cond (re-find #"^\d+$" num-string)      [:inline(util/parse-int num-string)]
+          (re-find #"^\d+\.\d+$" num-string) [:inline(util/parse-float num-string)]
+
+          :default (into [:raw] nodes))
+
+    (into [:inline] nodes)))
 
 (defmethod parse-expression-node {:type :expression, :sub-type :parenthetical}
   [node]

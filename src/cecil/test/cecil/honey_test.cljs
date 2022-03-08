@@ -77,7 +77,7 @@
      (test-convert "1 number field w/ alias"
         "select 1 as one from dual"
         {:select
-           [[[:inline "1"] :one]]
+           [[[:inline 1] :one]]
          :from [:dual]})
 
      (test-convert "dual - qualified table, qualified field no alias"
@@ -126,7 +126,7 @@
         :from
           [[:re :r]]
         :where
-           [:> :r.r [:inline "9879823"]]
+           [:> :r.r [:inline 9879823]]
         :order-by
           [:r.a
            :r.b]})
@@ -168,8 +168,8 @@
        {:select [:R.RCPT_ID :R.RCPT_NUM]
         :from [[:RCPT :R]]
         :where  [:and
-                  [:= :R.STATUS_ID [:inline "111"]]
-                  [:= :R.REASON_CD [:inline "123123"]]]})
+                  [:= :R.STATUS_ID [:inline 111]]
+                  [:= :R.REASON_CD [:inline 123123]]]})
 
      (test-convert "where between numbers"
        "SELECT R.RCPT_ID
@@ -179,8 +179,8 @@
         :from [[:RCPT :R]]
         :where  [:between
                   :R.STATUS_CD
-                  [:inline "111"]
-                  [:inline "222"]]})
+                  [:inline 111]
+                  [:inline 222]]})
 
      (test-convert "where between expressions"
        "SELECT R.RCPT_ID
@@ -190,8 +190,8 @@
         :from [[:RCPT :R]]
         :where  [:between
                   :R.STATUS_CD
-                  [:+ [:inline "111"] [:inline "0"]]
-                  [:+ [:inline "222"] [:inline "0"]]]})
+                  [:+ [:inline 111] [:inline 0]]
+                  [:+ [:inline 222] [:inline 0]]]})
 
      ;#_
      (test-convert "where between expressions and another expression"
@@ -202,12 +202,12 @@
         :from [[:RCPT :R]]
         :where [:and
                 [:and ; to-do: consider flattening and..and
-                  [:= [:inline "1"] [:inline "1"]]
+                  [:= [:inline 1] [:inline 1]]
                   [:between
                     :R.STATUS_CD
-                    [:+ [:inline "111"] [:inline "0"]]
-                    [:+ [:inline "222"] [:inline "0"]]]]
-                [:= [:inline "2"] [:inline "2"]]]})
+                    [:+ [:inline 111] [:inline 0]]
+                    [:+ [:inline 222] [:inline 0]]]]
+                [:= [:inline 2] [:inline 2]]]})
 
      (test-convert "where between select expressions"
        "SELECT R.RCPT_ID
@@ -217,7 +217,7 @@
         :from [[:RCPT :R]]
         :where  [:between
                   :R.STATUS_CD
-                  {:select [[:inline "111"]] :from [:dual]}
-                  {:select [[:inline "222"]] :from [:dual]}]})
+                  {:select [[:inline 111]] :from [:dual]}
+                  {:select [[:inline 222]] :from [:dual]}]})
 
      (comment :end)))
