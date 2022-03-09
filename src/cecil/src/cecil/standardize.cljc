@@ -617,9 +617,12 @@
                [[... select-node] remaining-tokens])
   Returns value equivalent to [from-etc nil] when there aren't any set operations (of additional select expressions)."
   [from-etc-node]
+  ;(prn 'parse-from-etc-for-set-ops from-etc-node)
+
   (loop [depth 0
          ts (seq (:nodes from-etc-node))
          new-from-etc []]
+    ;(prn 'parse-from-etc-for-set-ops :loop depth (first ts))
     (if-not ts
       [(assoc from-etc-node :nodes new-from-etc) ; node
        nil]                                      ; remaining tokens
@@ -636,6 +639,7 @@
 
 (defn parse-select
   [tokens]
+  ;(prn 'parse-select ::tokens tokens)
   (let [[kw tokens] (next-token tokens)
         [distinct tokens] (let [[{:keys [type keyword] :as d} toks] (next-token tokens)]
                             (if (and (= :keyword type) (= keyword :distinct))
@@ -669,7 +673,10 @@
                             is-top-level?
                             (or is-top-level? is-same-line?)
                             (conj new-nodes new-node))))))
+        ;_ (prn 'parse-select ::from-etc from-etc)
+        ;_ (clojure.pprint/pprint ['parse-select ::from-etc from-etc])
         [from-etc2 more-remaining] (parse-from-etc-for-set-ops (assert-ast-node from-etc))
+        ;_ (prn '[from-etc2 more-remaining] [from-etc2 more-remaining])
         select-list
         {:type :select-list
          :nodes (assert-ast-nodes select-list-parsed)}]

@@ -17,6 +17,13 @@
   [& args]
   #?(:cljs (apply js/console.warn args)))
 
+(defn decorate-source-meta
+  [x & stuff]
+  (try
+    (vary-meta x update ::source #(conj (or %1 []) %2) stuff)
+    (catch #?(:cljs js/Error :default Exception) e
+      x)))
+
 (defn token-of-type?
  ([n kw]
   (= kw (:type n)))
@@ -40,6 +47,8 @@
 
 (def ternary-operator-kws
   #{:between})
+
+(def prevent-unwrap-keywords #{:in})
 
 (def binary-operator-token-nodes
   (into #{} (map vector) ["*" "/" "||" "+" "-" "in" "IN" "In" "iN"]))
@@ -117,98 +126,130 @@
      after-b-nodes]))
 
 (defmulti parse-expression-node
-  (fn parse-expression-node_dispatch [node]
+  (fn parse-expression-node_dispatch [opts node]
     (select-keys node [:type :sub-type :keyword])))
 
 (defmethod parse-expression-node :default
-  [node]
+  [opts node]
   (raw {:type :expression
         :nodes [node]}))
 
 (defmethod parse-expression-node {:type :string-double}
-  [{:keys [nodes] :as node}]
-  (assert (= 1 (count nodes)))
+  [opts {:keys [nodes] :as node}]
+  (assert (== 1 (count nodes)))
   (let [encoded-string (first nodes)]
     [:inline (util/unwrap-string-double encoded-string)]))
 
 (defmethod parse-expression-node {:type :string-single}
-  [{:keys [nodes] :as node}]
-  (assert (= 1 (count nodes)))
+  [opts {:keys [nodes] :as node}]
+  (assert (== 1 (count nodes)) (str (pr-str node) (string/join ", " nodes)))
   (let [encoded-string (first nodes)]
     [:inline (util/unwrap-string-single encoded-string)]))
 
 (defmethod parse-expression-node {:type :number}
-  [{:keys [nodes]}]
+  [opts {:keys [nodes]}]
   (if-let [num-string (as-> (and (== 1 (count nodes)) (first nodes)) only-node
                         (and (string? only-node) only-node))]
-    (cond (re-find #"^\d+$" num-string)      [:inline(util/parse-int num-string)]
-          (re-find #"^\d+\.\d+$" num-string) [:inline(util/parse-float num-string)]
+    (cond (re-find #"^\d+$" num-string)      [:inline (util/parse-int num-string)]
+          (re-find #"^\d+\.\d+$" num-string) [:inline (util/parse-float num-string)]
 
           :default (into [:raw] nodes))
 
     (into [:inline] nodes)))
 
 (defmethod parse-expression-node {:type :expression, :sub-type :parenthetical}
-  [node]
+  [opts node]
   (let [child-nodes-without-parens (-> (:nodes node) rest butlast)]
     (if (every? #(token-of-type? % :expression) child-nodes-without-parens)
-      (cond-> (mapv parse-expression-node child-nodes-without-parens)
-        (== 1 (count child-nodes-without-parens)) first) ; unwrap when there's only one node, especially `(select...)`
+      (cond-> (mapv parse-expression-node (repeat (dissoc opts :prevent-unwrap)) child-nodes-without-parens)
+        (and ; unwrap when there's only one node, especially `(select...)`
+             (== 1 (count child-nodes-without-parens)))
+             ;(not (:prevent-unwrap opts)))
+        first
+
+        :decorate
+        (decorate-source-meta `[parse-expression-node {:type :expression, :sub-type :parenthetical} ~opts ~child-nodes-without-parens]))
       (raw {:type :expression
             :nodes [node]}))))
 
 (defmethod parse-expression-node {:type :expression, :sub-type :parenthetical-indent}
-  [{:keys [nodes] :as node}]
+  [opts {:keys [nodes] :as node}]
   (let []
     (cond (every? #(token-of-type? % :select) nodes)
           (cond-> (map parse-selects nodes)
-            (== 1 (count nodes)) first) ; unwrap when there's only one node, especially `(select...)`
+            (and ; unwrap when there's only one node, especially `(select...)`
+                 (== 1 (count nodes))
+                 (not (:prevent-unwrap opts)))
+            first
 
-          (some #(token-of-type? % :comma) nodes)
-          (do
-           (console-warn "If you see this, please comment the circumstance under which it is required." node)
-           (->> nodes
+            :decorate
+            (decorate-source-meta `[parse-expression-node {:type :expression, :sub-type :parenthetical-indent} 0 ~opts]))
+
+          (or (some #(token-of-type? % :comma) nodes) ; especially `x in (1,2,3)
+              (:prevent-unwrap opts))
+          (->> nodes
                (partition-by #(token-of-type? % :comma))
                (remove #(token-of-type? (first %) :comma))
-               (mapv #(cond-> (mapv parse-expression-node %)
-                        (not (next %)) first))))
+               (mapv #(cond-> (mapv parse-expression-node (repeat (dissoc opts :prevent-unwrap)) %)
+                        (and ; unwrap
+                             (not (next %)))
+                             ;(not (:prevent-unwrap opts)))
+                        first
+
+                        :decorate
+                        (decorate-source-meta `[parse-expression-node {:type :expression, :sub-type :parenthetical-indent} 1 ~opts]))))
 
           :default
-          (cond-> (mapv parse-expression-node nodes)
-            (not (next nodes)) first)))) ; unwrap
+          (let [results (mapv parse-expression-node (repeat (dissoc opts :prevent-unwrap)) nodes)]
+            (cond-> results
+              (and ; unwrap
+                   (== 1 (count results))
+                   (not (next nodes))
+                   (not (:prevent-unwrap opts)))
+              first
+
+              :decorate
+              (decorate-source-meta `[parse-expression-node {:type :expression, :sub-type :parenthetical-indent} 2 ~opts]))))))
 
 (defmethod parse-expression-node {:type :expression}
-  [{:keys [nodes] :as node}]
-  (console-trace 'parse-expression-node :expression :count (count nodes) :nodes nodes #_#_:result (apply parse-expression-nodes nodes))
+  [opts {:keys [nodes] :as node}]
   (apply parse-expression-nodes nodes))
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
-  [node]
+  [opts node]
   (parse-identifier-kw (:nodes node)))
 
 (defmethod parse-expression-node {:type :identifier}
-  [node]
+  [opts node]
   ;{'identifier}
   (parse-identifier-kw (:nodes node)))
 
-(defn- parse-expression-nodes-inner
-  [& nodes]
-  (if (next nodes)
-    (mapv parse-expression-node nodes)
-    (parse-expression-node (first nodes))))
+(defn parse-expression-nodes-inner
+  [{:keys [prevent-unwrap] :as opts} & nodes]
+ (cond->
+  (if (or prevent-unwrap (next nodes))
+    (mapv parse-expression-node (repeat (dissoc opts :prevent-unwrap)) nodes)
+    (parse-expression-node opts (first nodes)))
+
+  :decorate
+  (decorate-source-meta `[parse-expression-nodes-inner ~(or prevent-unwrap (next nodes)) ~opts])))
 
 (defn- parse-expression-nodes-binary-eq
-  [& nodes]
+  [opts & nodes]
+ (cond->
   (cond
     (empty? nodes)
     {'parse-expression-nodes-binary-eq :empty}
 
-    (== 1 (count nodes))
-    (parse-expression-node (first nodes))
+    (and (== 1 (count nodes))
+         (not (:prevent-unwrap opts))) ; to-do: should I prevent unwrap?
+    (do ;(console-log 'parse-expression-nodes-binary-eq :opt 0 nodes :result (parse-expression-node opts (first nodes)) :opts opts)
+      (parse-expression-node opts (first nodes)))
 
     :more
     (loop [result-expr nil  ; or should this be nil and check for it below?
-           nodes nodes]
+           nodes nodes
+           prevent-unwrap false] ;(or (:prevent-unwrap opts) false)]
       (let [[left-nodes [op & right-nodes]]
             (split-with
               (complement binary-operator-token?)
@@ -216,41 +257,49 @@
         (if-not op
           (let [left-expr
                 (when (and (coll? left-nodes) (seq left-nodes))
-                  (prn 'parse-expression-nodes-binary-eq left-nodes)
-                  (apply parse-expression-nodes-inner left-nodes))]
+                  (apply parse-expression-nodes-inner {:prevent-unwrap prevent-unwrap} left-nodes))]
            (cond (and (vector? result-expr)
                       (vector? left-expr)
-                      (= (first result-expr) (first left-expr)))
-                 (into result-expr left-expr)
+                      (= (first result-expr) (first left-expr))) ; combine [:and [:and expr-a expr-b] expr-c] -> [:and expr-a expr-b expr-c]
+                 (as-> (into result-expr left-expr) x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 1 left-expr :result x (pr-str x))x))
 
                  left-expr
-                 (conj result-expr left-expr)
+                 (as-> (conj result-expr left-expr) x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 2 left-expr :result x (pr-str x))x))
 
                  :default
-                 result-expr))
+                 (as-> result-expr x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 3 :result x (pr-str x))x))))
           (let [expr [(parse-operator-kw op)]
-                left-parsed (when (seq left-nodes) (apply parse-expression-nodes-binary-eq left-nodes))]
+                left-parsed (when (seq left-nodes) (apply parse-expression-nodes-binary-eq (update opts :prevent-unwrap #(or % prevent-unwrap)) left-nodes))
+                new-prevent-unwrap (or prevent-unwrap (contains? prevent-unwrap-keywords (:keyword op)))]
+            (console-log 'parse-expression-nodes-binary-eq :loop 'so left-parsed {:prevent-unwrap prevent-unwrap})
             (recur
               (cond
                 result-expr          (into expr (into result-expr left-parsed))
                 left-parsed          (conj expr left-parsed)
                 :default             expr)
-              right-nodes)))))))
+              right-nodes
+              new-prevent-unwrap))))))
+
+  :decorate
+  (decorate-source-meta `[parse-expression-nodes-binary-eq ~opts])))
 
 (defn- parse-expression-nodes-binary-bin
-  [& nodes]
+  [opts & nodes]
+ (cond->
   (cond
     (empty? nodes)
     {'parse-expression-nodes-binary-bin :empty}
 
-    (== 1 (count nodes))
-    (parse-expression-node (first nodes))
+    (and (== 1 (count nodes))
+         (not (:prevent-unwrap opts))) ; to-do: should I prevent unwrap?
+    (parse-expression-node opts (first nodes))
 
     :more
     (loop [result-expr nil  ; or should this be nil and check for it below?
            nodes nodes]
      (if (empty? nodes)
-      result-expr
+      (cond-> result-expr
+        (:prevent-unwrap opts) vector)
       (let [[left-nodes [op & right-nodes]]
             (split-with
               (complement
@@ -259,12 +308,12 @@
               nodes)]
         (if-not op
           (let [;_ (console-log 'parse-expression-nodes-binary-bin :result result-expr :loop 1 :left-expr (apply parse-expression-nodes-binary-eq left-nodes))
-                left-expr (apply parse-expression-nodes-binary-eq left-nodes)]
+                left-expr (apply parse-expression-nodes-binary-eq opts left-nodes)]
             (cond->> left-expr
               result-expr (conj result-expr)))
           (if-let [op-kw (ternary-operator-kws (:keyword op))]
             (let [_ (console-log 'parse-expression-nodes-binary-bin :result result-expr 'ternary op-kw :loop 21)
-                  left-expr (apply parse-expression-nodes-binary-bin left-nodes)
+                  left-expr (apply parse-expression-nodes-binary-bin opts left-nodes)
                   [ternary-expr new-right-nodes] (parse-ternary left-expr op-kw right-nodes)
                   [next-op & next-right-nodes] new-right-nodes]
               (if (:keyword next-op)
@@ -277,16 +326,19 @@
                   (cond->> ternary-expr
                     result-expr (conj result-expr))
                   new-right-nodes)))
-           (let [additional-expr (apply parse-expression-nodes-binary-bin left-nodes)]
+           (let [additional-expr (apply parse-expression-nodes-binary-bin opts left-nodes)]
             (recur
               [(parse-operator-kw op)
                (cond->> additional-expr
                  result-expr (conj result-expr))]
-              right-nodes)))))))))
+              right-nodes))))))))
+
+  :decorate
+  (decorate-source-meta `[parse-expression-nodes-binary-bin ~opts])))
 
 (defn- parse-expression-nodes
   [& nodes]
-  (apply parse-expression-nodes-binary-bin nodes))
+  (apply parse-expression-nodes-binary-bin nil nodes))
 
 (defn- parse-comma-separated-expression-nodes
   "Handles parts of `from`, `group by` and `order by`"
@@ -307,11 +359,11 @@
   "Handles `dual`, `dual d`, `(select 1 from dual) d`, etc."
   [& nodes]
   (case (count nodes)
-    1 (parse-expression-node (first nodes))
-    2 [(parse-expression-node (first nodes)) (parse-expression-node (second nodes))]
+    1 (parse-expression-node nil (first nodes))
+    2 [(parse-expression-node nil (first nodes)) (parse-expression-node nil (second nodes))]
       (do
         (console-warn "Unexpected node count in table expression expected table name or (select...), optionally followed by alias." 'parse-from-table-expression-nodes nodes)
-        (mapv parse-expression-node nodes))))
+        (mapv parse-expression-node (repeat nil) nodes))))
 
 (defn- parse-comma-separated-expression-nodes-from
   "Handles `from`"
@@ -329,11 +381,11 @@
   Table name alias doesn't allow `AS` (`from dual ~~AS~~ x`)."
   [{:keys [nodes] :as fd-node}]
   (if (token-of-type? fd-node :identifier :number)
-    (parse-expression-node fd-node)
+    (parse-expression-node nil fd-node)
 
     (if-let [[expr as alias] ; check for `field AS alias`
              (as-> (partition-by #(token-of-keyword? % :as) nodes) expr-as-alias
-               (if (and (= 3 (count expr-as-alias)) (= 1 (count (last expr-as-alias) #_alias)))
+               (if (and (= 3 (count expr-as-alias)) (== 1 (count (last expr-as-alias) #_alias)))
                  expr-as-alias))]
       ; `expr AS alias` => [(parse expr) :alias]
       [(apply parse-expression-nodes expr)
@@ -480,26 +532,6 @@
        ;::orig with-node}
       select)))
 
-(defn- parse-join-kw
-  [s]
-  (let [normalized (string/upper-case s)]
-    (case normalized
-      "JOIN"        :join
-      "LEFT JOIN"   :left-join
-      "RIGHT JOIN"  :right-join
-      "INNER JOIN"  :join
-      "OUTER JOIN"  :outer-join
-      "FULL JOIN"   :full-join
-                    s)))
-
-(defn- parse-function-invocation
-  [& nodes]
-  (prn :parse-function-invocation nodes)
- (let [[fn-ident [lparen args rparen]] nodes]
-  (into [fn-ident]
-    (keep #(cond (= ::comma %)              nil
-                 :default %))
-    args)))
 
 (defn- parse-parenthetical-expression
   [& [n1 n2 :as ast-nodes]]
