@@ -48,25 +48,16 @@
 (def ternary-operator-kws
   #{:between})
 
-(def prevent-unwrap-keywords #{:in})
+(def prevent-unwrap-keywords #{:in :not-in})
 
 (def binary-operator-token-nodes
-  (into #{} (map vector) ["*" "/" "||" "+" "-" "in" "IN" "In" "iN"]))
+  (into #{} (map vector) ["*" "/" "||" "+" "-"]))
 
 (defn binary-operator-token?
   [n]
   (or (token-of-type? n :equals :not-equals :inequality :not-compare)
+      (token-of-keyword? n :in :not-in :is :is-not)
       (contains? binary-operator-token-nodes (:nodes n))))
-
-(defn- combine-keywords
-  [kw-nodes]
-  (->> kw-nodes
-       :nodes
-       (pr-str);(keep :keyword)
-       ; (map name)
-       ; (string/join "-")
-       ; keyword
-       str))
 
 (defn flatten-tokens
   [node]
@@ -86,7 +77,7 @@
 
 (defn- parse-operator-kw
   [{:keys [nodes sub-type] :as node}]
-  (->> node flatten-tokens string/join string/lower-case keyword))
+  (-> node flatten-tokens string/join string/lower-case (string/replace #"\s+" "-") keyword))
 
 (defn- raw
   [{:keys [nodes] :as node}]
@@ -494,20 +485,6 @@
           {set-op-kw [query query2]}
           {set-op-kw (into [query] query2-same-set-type)})))))
 
-
-; (defn flatten-selects-expr
-;   [x]
-;   (let [nodes-to-expand (-> x :nodes first :nodes)
-;         expanded (mapcat identity
-;                    (for [{:keys [nodes] :as n} nodes-to-expand]
-;                       (if (not (token-of-type? n :expression));(or true (string? (first nodes)))
-;                         [n]
-;                         nodes)))
-;         selects (parse-selects expanded)]
-;     {'flatten-selects-expr expanded
-;      :selects selects}))
-
-
 (defn parse-ctes
   [nodes]
   (->> nodes
@@ -531,7 +508,6 @@
        ;::parenthetical-ctes  parenthetical-ctes  ::select  select
        ;::orig with-node}
       select)))
-
 
 (defn- parse-parenthetical-expression
   [& [n1 n2 :as ast-nodes]]
@@ -580,12 +556,7 @@
         [x]
         (if-not (standardize/ast-node? x)
           x
-          (let [{:keys [;absolute-indent indent own-line?
-                        type sub-type
-
-                        ;leading-whitespace
-                        nodes]} x
-                replacement
+          (let [replacement
                 (cond ; table.field
                       ; (and (= type :identifier) (= sub-type :composite))
                       ; (apply keyword (keep #(cond (ident? %) (name %)) nodes))
@@ -616,7 +587,7 @@
                       ; (= type :rparen)
                       ; ::rparen
 
-                      (and (= type :select))
+                      (and (= (:type x) :select))
                       (parse-selects x)
 
                       ; (and (= type :select-list))
@@ -638,7 +609,7 @@
                       ; (apply parse-field-definition nodes)
 
 
-                      (= type :comment)
+                      (= (:type x) :comment)
                       (list* 'comment (->> x flatten-tokens (map (fn de-comment [s] (string/replace s #"(?m)^/\*[\u0020]?|[\u0020]?\*/$|^[\u0020]*--[\u0020]?" "")))))
 
                       :default
@@ -647,7 +618,18 @@
             (prn ::x x '=> replacement)
             replacement))))
     ((cond (and (= type :expression) (= sub-type :with)) parse-with
-           :default                                      (do (prn 'transcode-honey type sub-type) identity))))))
+           :default                                      (do (prn 'transcode-honey type sub-type) identity)))
+
+    (walk/prewalk
+      (fn post-transcode-walk
+        [x]
+        (case x
+          :null        [:inline nil]
+
+          :is          :=
+          :is-not      :not=
+
+          x))))))
 
 (defn- transcode-honey-summary
   [ast-node]

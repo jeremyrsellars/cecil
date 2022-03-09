@@ -51,7 +51,7 @@
      (list* "order by" "group by" "join" "inner join" "outer join" "full outer join" "left join" "full left join" "right join" "full right join"
             "union all" "union" "except")
      (map clojure.core/keyword)
-     (into #{})))
+     (into #{:not-in :is-not})))
 
 (def functions
    (str "abs acos add_months ascii asin atan atan2 average "
@@ -155,7 +155,7 @@
 
 (defn canonical-keyword
   [s]
-  (clojure.core/keyword (string/lower-case s)))
+  (clojure.core/keyword (string/lower-case (string/replace s #"\s+" "-"))))
 
 (defn string->token
   [s]
@@ -260,6 +260,8 @@
   (fn [{:keys [keyword] :as ast-node}]
     (or keyword :default)))
 
+(defmethod keyword-own-line? :is-not         [_] false)
+(defmethod keyword-own-line? :not-in         [_] false)
 (defmethod keyword-own-line? :in             [_] false)
 (defmethod keyword-own-line? :and            [_] true)
 (defmethod keyword-own-line? :or             [_] true)
@@ -356,7 +358,7 @@
     (contains? top-level-keywords keyword)
     0
 
-    (#{:on :in} keyword)
+    (#{:on :in :not-in} keyword)
     0
 
     :default

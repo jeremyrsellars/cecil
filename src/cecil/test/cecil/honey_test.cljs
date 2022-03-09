@@ -63,13 +63,14 @@
              ([why-msg sql expected-ast]
               (let [[ast remaining]   (h/convert (string/trim sql) {})
                     [missing extra same] (diff expected-ast ast)]
-               ;(when (re-find #" in \('one" sql)
+               ;(when (re-find #" not in" sql)
                 (testing (str why-msg (when why-msg " |==| ") sql)
                   (when (seq remaining)
                     (is (empty? remaining)
                       "Extra tokens"))
                   ; (is nil? (with-out-str (pprint/pprint ast))))))]
-                  (is (or (= expected-ast ast)))
+                  (is (= expected-ast ast)
+                    (pr-str ast))
 
                   ; (is (nil? ast))]
                   ; (is (nil? (s/explain-data ::cts/ast-node expected))
@@ -235,6 +236,27 @@
                   :R.name
                   [:inline "hi"]]})
 
+     ;; Where is
+     (test-convert "where is null"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.STATUS_CD is null"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:=
+                  :R.STATUS_CD
+                  [:inline nil]]})
+
+     (test-convert "where is not null"
+       "SELECT R.RCPT_ID
+      FROM RCPT R
+      WHERE R.STATUS_CD is not null"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where  [:not=
+                  :R.STATUS_CD
+                  [:inline nil]]})
+
      ;; Where Between
      (test-convert "where between numbers"
        "SELECT R.RCPT_ID
@@ -307,5 +329,11 @@
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
         :where [:in :R.STATUS_CD [[[:inline "one"] [:inline "two"]]]]})
+
+     (test-convert "where not in numbers"
+       "SELECT R.RCPT_ID      FROM RCPT R       WHERE R.STATUS_CD not in (11111, 22222)"
+       {:select [:R.RCPT_ID]
+        :from [[:RCPT :R]]
+        :where [:not-in :R.STATUS_CD [[[:inline 11111] [:inline 22222]]]]})
 
      (comment :end)))
