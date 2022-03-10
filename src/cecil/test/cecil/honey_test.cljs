@@ -58,7 +58,7 @@
                                                               node)))))))))))
 
 (deftest honey-converts-sql-text-to-HoneySQL-data
-  (let [test-filter-pattern (if false #"union" #".")]
+  (let [test-filter-pattern (if false #"suggested field aliases" #".")]
    (letfn [(test-convert
              ;([sql expected-ast](test-convert nil sql expected-ast)
              ([why-msg sql      expected-ast]     (test-convert why-msg sql nil expected-ast))
@@ -70,6 +70,7 @@
                   (when (seq remaining)
                     (is (string/blank? (apply str remaining))
                       (str "Extra tokens:" (apply pr-str remaining))))
+                  ; (is nil? (with-out-str (pprint/pprint ast))))))])
                   (is (= expected-ast ast)
                     (pr-str ast))
 
@@ -355,5 +356,29 @@
              {:select [(cond-> [:inline "zqweqwe"]
                          should-suggest-field-alias (vector :zqweqwe))]
               :from [:dual]}]}))
+
+     (test-convert (str "suggested field aliases are <= 30 chars, only have word characters, etc.")
+       "SELECT 'a\"'
+       , \"123-456-7890\"
+       , 'replace space'
+       , 'PrEsErVe-CaSe'
+       , 'x12345678901234567890123456789TruncatesTo30Characters'
+       , \"~`!@#$%^&*()_+{}|:\"\"<>?,./;'[]\\replace non-word characters\"
+       , 0
+       , null
+       , 'select'
+       FROM dual"
+        {:should-suggest-field-alias true}
+        {:select
+         [[[:inline "a\""] :a_]
+          [[:inline "123-456-7890"] :_123_456_7890]
+          [[:inline "replace space"] :replace_space]
+          [[:inline "PrEsErVe-CaSe"] :PrEsErVe_CaSe]
+          [[:inline "x12345678901234567890123456789TruncatesTo30Characters"] :x12345678901234567890123456789] ; 30 digits
+          [[:inline "~`!@#$%^&*()_+{}|:\"<>?,./;'[]\\replace non-word characters"] :______________________________] ; 30 underscores
+          [[:inline 0] :_0]
+          [[:inline nil] :_null]
+          [[:inline "select"] :_select]] ; a SQL keyword probably can't be an alias
+         :from [:dual]})
 
      (comment :end))))

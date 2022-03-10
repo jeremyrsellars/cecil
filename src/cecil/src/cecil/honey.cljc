@@ -124,6 +124,10 @@
   (raw {:type :expression
         :nodes [node]}))
 
+(defmethod parse-expression-node {:type :keyword, :keyword :null}
+  [opts node]
+  [:inline nil])
+
 (defmethod parse-expression-node {:type :string-double}
   [opts {:keys [nodes] :as node}]
   (assert (== 1 (count nodes)))
@@ -368,8 +372,14 @@
 (defn- infer-field-alias
  ([nodes](infer-field-alias nodes (comp str first)))
  ([nodes nodes->str-fn]
-  (console-log 'infer-field-alias nodes nodes->str-fn)
-  (-> nodes nodes->str-fn keyword)))
+  (console-log 'infer-field-alias nodes nodes->str-fn (nodes->str-fn nodes))
+  (-> nodes
+      nodes->str-fn
+      (string/replace #"\W" "_") ; replace non-word characters with underscore
+      (string/replace #"^(?=\d)" "_") ; can't start an alias with a digit, so insert `_`
+      (string/replace @keyword-alias-replacement-pattern-ref "_")
+      (util/truncate 30)
+      keyword)))
 
 (defn- parse-field-definition
   "Parses a {:type :field-definition} node, including optional 'as' alias.
@@ -380,7 +390,10 @@
     (token-of-type? fd-node :identifier)
     (as-> (parse-expression-node opts fd-node) expr
       (cond-> expr
-        (:should-suggest-field-alias opts) (vector (-> nodes flatten-tokens last keyword))))
+        (:should-suggest-field-alias opts) (vector (infer-field-alias nodes (comp last flatten-tokens)))))
+
+    (token-of-keyword? fd-node :null)
+    [[:inline nil] :_null]
 
     (token-of-type? fd-node :number)
     (as-> (parse-expression-node opts fd-node) expr
@@ -679,9 +692,7 @@
            (with-out-str (pprint/pprint remaining))))))
 
 (def option-keys
- [:indent
-  :new-line
-  :break-parenthetical-length])
+ [:should-suggest-field-alias])
 
 #?(:cljr
     (defrecord Options [^String indent ^String new-line break-parenthetical-length] :load-ns true))
@@ -692,7 +703,7 @@
 #?(:cljs
     (defn ^:export transcode
       [sql jsObj_options]
-      (let [options (set/rename
+      (let [options (set/rename-keys
                       (js->clj jsObj_options)
                       (zipmap (map name option-keys) option-keys))]
         (tokenize-and-honeyize (str sql) options)))

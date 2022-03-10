@@ -120,7 +120,7 @@ ORDER BY b.baz DESC, c.quux ASC, f.a
             var sqlOrError = ""
             var sql = sqlCM.getValue("\r\n")
             try {
-                var after = cecil.honey.transcode(sql);
+                var after = cecil.honey.transcode(sql, {"should-suggest-field-alias": true});
                 ednCM.setValue(after.trim());
             } catch (e) {
                 console.error(e)

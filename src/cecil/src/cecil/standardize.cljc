@@ -32,7 +32,7 @@
         "key "
         "level library like limited local lock log logging long loop "
         "master maxextents maxtrans member minextents minus mislabel mode modify multiset "
-        "new next no noaudit nocompress nologging noparallel not nowait number_base "
+        "new next no noaudit nocompress nologging noparallel not nowait null number_base "
         "object of off offline on online only open option or order out over "
         "package parallel partition pctfree pctincrease pctused pls_integer positive positiven pragma primary prior "
         "private privileges procedure public "

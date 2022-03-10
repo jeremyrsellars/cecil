@@ -44,3 +44,9 @@
   [encoded-string]
   (string/replace encoded-string #"^'|'$|''" #(if (= "''" %) "'" "")))
 
+(defn truncate
+  "Truncates s to maximum length n."
+  [s n]
+  (cond-> s
+    (< n (count s))
+    (subs 0 n)))
