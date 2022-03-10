@@ -99,20 +99,19 @@
   (split-with pred nodes))
 
 (defn parse-expression-nodes-until
-  [take-while-pred & nodes]
+  [opts take-while-pred & nodes]
   (let [[expr-nodes rst] (paren-matching-split-with (complement take-while-pred) nodes)]
-    [(apply parse-expression-nodes expr-nodes)
+    [(apply parse-expression-nodes opts expr-nodes)
      rst]))
 
-(defmulti parse-ternary (fn parse-ternary_dispatch [left-expr op-kw right-nodes] op-kw))
+(defmulti parse-ternary (fn parse-ternary_dispatch [opts left-expr op-kw right-nodes] op-kw))
   ; [ternary-expr remaining-right-nodes]
 
 (defmethod parse-ternary :between
-  [left-expr op-kw after-op-nodes]
-  (console-log 'parse-ternary left-expr op-kw after-op-nodes)
-  (let [[a and-b-rest] (apply parse-expression-nodes-until #(token-of-keyword? % :and) after-op-nodes)
+  [opts left-expr op-kw after-op-nodes]
+  (let [[a and-b-rest] (apply parse-expression-nodes-until opts #(token-of-keyword? % :and) after-op-nodes)
         b-rest (rest and-b-rest)
-        [b after-b-nodes] (apply parse-expression-nodes-until #(token-of-keyword? % :and :or) b-rest)]
+        [b after-b-nodes] (apply parse-expression-nodes-until opts #(token-of-keyword? % :and :or) b-rest)]
     [[:between left-expr a b]
      after-b-nodes]))
 
@@ -167,7 +166,7 @@
   [opts {:keys [nodes] :as node}]
   (let []
     (cond (every? #(token-of-type? % :select) nodes)
-          (cond-> (map parse-selects nodes)
+          (cond-> (mapv parse-selects (repeat opts) nodes)
             (and ; unwrap when there's only one node, especially `(select...)`
                  (== 1 (count nodes))
                  (not (:prevent-unwrap opts)))
@@ -204,7 +203,7 @@
 
 (defmethod parse-expression-node {:type :expression}
   [opts {:keys [nodes] :as node}]
-  (apply parse-expression-nodes nodes))
+  (apply parse-expression-nodes opts nodes))
 
 (defmethod parse-expression-node {:type :identifier, :sub-type :composite}
   [opts node]
@@ -234,7 +233,7 @@
 
     (and (== 1 (count nodes))
          (not (:prevent-unwrap opts))) ; to-do: should I prevent unwrap?
-    (do ;(console-log 'parse-expression-nodes-binary-eq :opt 0 nodes :result (parse-expression-node opts (first nodes)) :opts opts)
+    (do ;(console-log 'parse-expression-nodes-binary-eq opts :opt 0 nodes :result (parse-expression-node opts (first nodes)) :opts opts)
       (parse-expression-node opts (first nodes)))
 
     :more
@@ -248,7 +247,7 @@
         (if-not op
           (let [left-expr
                 (when (and (coll? left-nodes) (seq left-nodes))
-                  (apply parse-expression-nodes-inner {:prevent-unwrap prevent-unwrap} left-nodes))]
+                  (apply parse-expression-nodes-inner (assoc opts :prevent-unwrap prevent-unwrap) left-nodes))]
            (cond (and (vector? result-expr)
                       (vector? left-expr)
                       (= (first result-expr) (first left-expr))) ; combine [:and [:and expr-a expr-b] expr-c] -> [:and expr-a expr-b expr-c]
@@ -305,7 +304,7 @@
           (if-let [op-kw (ternary-operator-kws (:keyword op))]
             (let [_ (console-log 'parse-expression-nodes-binary-bin :result result-expr 'ternary op-kw :loop 21)
                   left-expr (apply parse-expression-nodes-binary-bin opts left-nodes)
-                  [ternary-expr new-right-nodes] (parse-ternary left-expr op-kw right-nodes)
+                  [ternary-expr new-right-nodes] (parse-ternary opts left-expr op-kw right-nodes)
                   [next-op & next-right-nodes] new-right-nodes]
               (if (:keyword next-op)
                 (recur
@@ -328,58 +327,83 @@
   (decorate-source-meta `[parse-expression-nodes-binary-bin ~opts])))
 
 (defn- parse-expression-nodes
-  [& nodes]
-  (apply parse-expression-nodes-binary-bin nil nodes))
+  [opts & nodes]
+  (apply parse-expression-nodes-binary-bin opts nodes))
 
 (defn- parse-comma-separated-expression-nodes
   "Handles parts of `from`, `group by` and `order by`"
-  [& nodes]
+  [opts & nodes]
   (let [results
         (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
           (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
           (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
-          (mapv #(apply parse-expression-nodes %)))]
+          (mapv #(apply parse-expression-nodes opts %)))]
     results))
 
 (defn- parse-comma-separated-expression-nodes-by
   "Handles `group by` and `order by`"
-  [& nodes]
-  (apply parse-comma-separated-expression-nodes nodes))
+  [opts & nodes]
+  (apply parse-comma-separated-expression-nodes opts nodes))
 
 (defn- parse-from-table-expression-nodes
   "Handles `dual`, `dual d`, `(select 1 from dual) d`, etc."
-  [& nodes]
+  [opts & nodes]
   (case (count nodes)
-    1 (parse-expression-node nil (first nodes))
-    2 [(parse-expression-node nil (first nodes)) (parse-expression-node nil (second nodes))]
+    1 (parse-expression-node opts (first nodes))
+    2 [(parse-expression-node opts (first nodes)) (parse-expression-node opts (second nodes))]
       (do
-        (console-warn "Unexpected node count in table expression expected table name or (select...), optionally followed by alias." 'parse-from-table-expression-nodes nodes)
-        (mapv parse-expression-node (repeat nil) nodes))))
+        (console-warn "Unexpected node count in table expression expected table name or (select...), optionally followed by alias." 'parse-from-table-expression-nodes opts nodes)
+        (mapv parse-expression-node (repeat opts) nodes))))
 
 (defn- parse-comma-separated-expression-nodes-from
   "Handles `from`"
-  [& nodes]
+  [opts & nodes]
   (let [results
         (->> nodes                                                       ; [{:type :expression}    {:type comma}  [{:type :expression}]]
              (partition-by #(token-of-type? % :field-conjunction :comma))   ; [[{:type :expression}] [{:type comma}] [{:type :expression}]]
              (remove #(token-of-type? (first %) :field-conjunction :comma)) ; [[{:type :expression}]                 [{:type :expression}]]
-             (map #(apply parse-from-table-expression-nodes %)))]
+             (mapv #(apply parse-from-table-expression-nodes opts %)))]
     results))
+
+(defn- infer-field-alias
+ ([nodes](infer-field-alias nodes (comp str first)))
+ ([nodes nodes->str-fn]
+  (console-log 'infer-field-alias nodes nodes->str-fn)
+  (-> nodes nodes->str-fn keyword)))
 
 (defn- parse-field-definition
   "Parses a {:type :field-definition} node, including optional 'as' alias.
   In PL/SQL, `AS` is optional in a result column definition (`select 1 AS x, 2 y`).
   Table name alias doesn't allow `AS` (`from dual ~~AS~~ x`)."
-  [{:keys [nodes] :as fd-node}]
-  (if (token-of-type? fd-node :identifier :number)
-    (parse-expression-node nil fd-node)
+  [opts {:keys [nodes] :as fd-node}]
+  (cond
+    (token-of-type? fd-node :identifier)
+    (as-> (parse-expression-node opts fd-node) expr
+      (cond-> expr
+        (:should-suggest-field-alias opts) (vector (-> nodes flatten-tokens last keyword))))
 
+    (token-of-type? fd-node :number)
+    (as-> (parse-expression-node opts fd-node) expr
+      (cond-> expr
+        (:should-suggest-field-alias opts) (vector (infer-field-alias nodes))))
+
+    (token-of-type? fd-node :string-single)
+    (as-> (parse-expression-node opts fd-node) expr
+      (cond-> expr
+        (:should-suggest-field-alias opts) (vector (infer-field-alias nodes (comp util/unwrap-string-single first)))))
+
+    (token-of-type? fd-node :string-double)
+    (as-> (parse-expression-node opts fd-node) expr
+      (cond-> expr
+        (:should-suggest-field-alias opts) (vector (infer-field-alias nodes (comp util/unwrap-string-double first)))))
+
+    :default
     (if-let [[expr as alias] ; check for `field AS alias`
              (as-> (partition-by #(token-of-keyword? % :as) nodes) expr-as-alias
                (if (and (= 3 (count expr-as-alias)) (== 1 (count (last expr-as-alias) #_alias)))
                  expr-as-alias))]
       ; `expr AS alias` => [(parse expr) :alias]
-      [(apply parse-expression-nodes expr)
+      [(apply parse-expression-nodes opts expr)
        (parse-identifier-kw (first alias))]
 
       (if-let [[expr alias] ; check for `field alias`
@@ -389,59 +413,59 @@
                  nodes)]
         ; `expr AS alias` => [(parse expr) :alias]
         (do
-          (map parse-expression-nodes nodes))
+          (mapv parse-expression-nodes (repeat opts) nodes))
 
         (do
-          (apply parse-expression-nodes nodes))))))
+          (apply parse-expression-nodes opts nodes))))))
 
 (defn- parse-select-list
-  [{:keys [nodes]}]
+  [opts {:keys [nodes]}]
   (into []
     (keep #(cond (token-of-type? % :field-conjunction :comma)              nil
-                 (token-of-type? % :field-definition)                      (apply parse-field-definition (:nodes %))
+                 (token-of-type? % :field-definition)                      (apply parse-field-definition opts (:nodes %))
                  :default                                                  %))
     nodes))
 
 (defn parse-join
-  [nodes]
+  [opts nodes]
   (let [[table-and-maybe-alias on expr-nodes] (partition-by #(token-of-keyword? % :on) nodes)]
-    [(into [](map keyword (flatten-tokens table-and-maybe-alias)))
-     (apply parse-expression-nodes expr-nodes)]))
+    [(into [](mapv keyword (flatten-tokens table-and-maybe-alias)))
+     (apply parse-expression-nodes opts expr-nodes)]))
 
 (defmulti assoc-parsed-clause (fn assoc-parsed-clause_dispatch [q clause-kw nodes] clause-kw))
 
 (defn assoc-parsed-join
-  [q clause-kw nodes]
+  [opts q clause-kw nodes]
   (update q
     :join-by
     (fn [jb]
       (conj (or jb [])
         clause-kw
-        (parse-join nodes)))))
+        (parse-join opts nodes)))))
 
 
 (defmethod assoc-parsed-clause :default
-  [q clause-kw nodes]
+  [opts q clause-kw nodes]
   (cond (re-find #"join" (name clause-kw))
-        (assoc-parsed-join q clause-kw nodes)
+        (assoc-parsed-join opts q clause-kw nodes)
 
         (re-find #"from" (name clause-kw)) ; comma-separated expressions
         (assoc q clause-kw
-          (apply parse-comma-separated-expression-nodes-from nodes))
+          (apply parse-comma-separated-expression-nodes-from opts nodes))
         (re-find #"order|group" (name clause-kw)) ; comma-separated expressions
         (assoc q clause-kw
-          (apply parse-comma-separated-expression-nodes-by nodes))
+          (apply parse-comma-separated-expression-nodes-by opts nodes))
 
         (re-find #"where|having" (name clause-kw)) ; expression
         (assoc q clause-kw
-          (apply parse-expression-nodes nodes))
+          (apply parse-expression-nodes opts nodes))
 
         :default
         (assoc q clause-kw
           (raw {:nodes nodes :type :raw}))))
 
 (defn- parse-from-etc
-  [nodes]
+  [opts nodes]
   (let [top-clauses
         (partition-all 2
           (partition-by
@@ -456,14 +480,14 @@
                   string/lower-case
                   keyword)]
           ;q #_
-          (assoc-parsed-clause q clause-kw val-nodes)))
+          (assoc-parsed-clause opts q clause-kw val-nodes)))
       {}
        ;:nodes nodes
        ;:top-clauses top-clauses}
       top-clauses)))
 
 (defn- parse-selects
-  [{select-nodes :nodes :as select-node}]
+  [opts {select-nodes :nodes :as select-node}]
   (let [[[select distinct] select-list-etc] (split-with #(token-of-keyword? % :select :distinct) (:nodes select-node))
         select-kw (keyword (string/join "-" (map name (keep :keyword [select distinct]))))
         [select-list expression] select-list-etc
@@ -472,12 +496,13 @@
         [set-op  -rest]       (split-with (complement query-set-op-kw?) set-op_rest)
 
         query
-        (merge {select-kw (parse-select-list select-list)}
-               (parse-from-etc q1-from))]
+        (merge {select-kw (parse-select-list opts select-list)}
+               (parse-from-etc opts q1-from))]
     (if (empty? set-op)
       query
       (let [set-op-kw (->> set-op flatten-tokens (string/join "-") keyword)
-            query2 (parse-selects (if (next -rest)
+            query2 (parse-selects opts
+                                  (if (next -rest)
                                     {:type ::additional-select :nodes -rest}
                                     (first -rest)))
             query2-same-set-type (get query2 set-op-kw)]
@@ -519,7 +544,6 @@
            (token-of-sub-type? n2 :expression :parenthetical-indent))
            ;(token-of-type? (first (:nodes n2)) :select))
     (do (prn 'parse-parenthetical-expression "jeremy" (first (:nodes n2)))
-        ;(parse-selects (:nodes n2)))
         (first (:nodes n2)))
     (into []
       (keep #(cond (= ::as %)              nil
@@ -545,7 +569,7 @@
     ast-node))
 
 (defn- transcode-honey
-  [{:keys [type sub-type] :as ast-node}]
+ [{:keys [type sub-type] :as ast-node} opts]
  (let [cleaned-node (clean-node ast-node)]
   (->> cleaned-node
      ; (prewalk-ancestry indention-walker-first-pass '())
@@ -588,10 +612,7 @@
                       ; ::rparen
 
                       (and (= (:type x) :select))
-                      (parse-selects x)
-
-                      ; (and (= type :select-list))
-                      ; (apply parse-select-list nodes)
+                      (parse-selects opts x)
 
                       ; (and (= type :function-invocation))
                       ; (apply parse-function-invocation nodes)
@@ -603,11 +624,7 @@
                       ; (do (prn :parenthetical-expression x)(apply parse-parenthetical-expression nodes))
 
                       ; (= type :expression)
-                      ; (do (prn :expression x)(apply parse-expression-nodes nodes))
-
-                      ; (and (= type :field-definition))
-                      ; (apply parse-field-definition nodes)
-
+                      ; (do (prn :expression x)(apply parse-expression-nodes opts nodes))
 
                       (= (:type x) :comment)
                       (list* 'comment (->> x flatten-tokens (map (fn de-comment [s] (string/replace s #"(?m)^/\*[\u0020]?|[\u0020]?\*/$|^[\u0020]*--[\u0020]?" "")))))
@@ -620,7 +637,7 @@
     ((cond (and (= type :expression) (= sub-type :with)) parse-with
            :default                                      (do (prn 'transcode-honey type sub-type) identity)))
 
-    (walk/prewalk
+    (walk/postwalk
       (fn post-transcode-walk
         [x]
         (case x
@@ -629,12 +646,15 @@
           :is          :=
           :is-not      :not=
 
-          x))))))
+          (cond
+            (list? x) (into [] x)
+
+            :default  x)))))))
 
 (defn- transcode-honey-summary
-  [ast-node]
+  [ast-node opts]
  (let [cleaned-node (clean-node ast-node)]
-  (->> (transcode-honey cleaned-node)
+  (->> (transcode-honey cleaned-node opts)
     summary-string
     (str "\r\n\r\n; ---------------- Before -----------------\r\n\r\n"
          (if false (with-out-str (pprint/pprint cleaned-node)) (pr-str cleaned-node))
@@ -648,12 +668,12 @@
       string/trim
       standardize/tokenize-and-parse
       (standardize/standardize options)
-      transcode-honey))
+      (transcode-honey options)))
 
 (defn tokenize-and-honeyize
   [sql options]
   (let [[ast remaining](convert sql options)]
-    (cond-> (transcode-honey-summary ast)
+    (cond-> (transcode-honey-summary ast options)
       (seq remaining)
       (str "\r\n\r\n-------- Remaining (extra or bug?) ------------\r\n"
            (with-out-str (pprint/pprint remaining))))))

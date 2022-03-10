@@ -58,17 +58,18 @@
                                                               node)))))))))))
 
 (deftest honey-converts-sql-text-to-HoneySQL-data
+  (let [test-filter-pattern (if false #"union" #".")]
    (letfn [(test-convert
-             ([sql expected-ast](test-convert nil sql expected-ast))
-             ([why-msg sql expected-ast]
-              (let [[ast remaining]   (h/convert (string/trim sql) {})
-                    [missing extra same] (diff expected-ast ast)]
-               ;(when (re-find #" not in" sql)
+             ;([sql expected-ast](test-convert nil sql expected-ast)
+             ([why-msg sql      expected-ast]     (test-convert why-msg sql nil expected-ast))
+             ([why-msg sql opts expected-ast]
+              (when (re-find test-filter-pattern (str "--" why-msg "\n" sql))
+               (let [[ast remaining]   (h/convert (string/trim sql) opts)
+                     [missing extra same] (diff expected-ast ast)]
                 (testing (str why-msg (when why-msg " |==| ") sql)
                   (when (seq remaining)
-                    (is (empty? remaining)
-                      "Extra tokens"))
-                  ; (is nil? (with-out-str (pprint/pprint ast))))))]
+                    (is (string/blank? (apply str remaining))
+                      (str "Extra tokens:" (apply pr-str remaining))))
                   (is (= expected-ast ast)
                     (pr-str ast))
 
@@ -86,7 +87,7 @@
                      "Missing from actual"))
                   (when extra
                     (is (nil? extra)
-                     "Extra in actual"))))))]
+                     "Extra in actual")))))))]
 
      (test-convert "dual - unqualified field no alias"
         "select dummy from dual"
@@ -175,7 +176,7 @@
           [:r.a
            :r.b]})
 
-     (test-convert
+     (test-convert "; leading comment"
         "; leading comment
         select distinct ;trailing comment
         item_id,
@@ -189,7 +190,7 @@
             :item_id]
          :from [[:cat_item :ci]]})
 
-     (test-convert
+     (test-convert "-- leading comment"
         "-- leading comment
         select distinct --trailing comment
         item_id,
@@ -205,7 +206,7 @@
            [[:cat_item :ci]]})
 
      ;; Where
-     (test-convert
+     (test-convert "where and"
        "   SELECT R.RCPT_ID, R.RCPT_NUM
       FROM RCPT R
       WHERE R.STATUS_ID = 111
@@ -336,4 +337,23 @@
         :from [[:RCPT :R]]
         :where [:not-in :R.STATUS_CD [[[:inline 11111] [:inline 22222]]]]})
 
-     (comment :end)))
+     ;; Select union
+     (doseq [[desc should-suggest-field-alias]
+             {"and suggest field alias" true
+              "but do not suggest field alias" false}]
+       (test-convert (str "select ... union all select, " desc)
+         "SELECT 'asdfljkdfsa' as dummy FROM dual union all
+          SELECT dual.dummy FROM dual       union all
+          SELECT 'zqweqwe' FROM dual"
+          {:should-suggest-field-alias should-suggest-field-alias}
+          {:union-all
+            [{:select [[[:inline "asdfljkdfsa"] :dummy]]
+              :from [:dual]}
+             {:select [(cond-> :dual.dummy
+                         should-suggest-field-alias (vector :dummy))]
+              :from [:dual]}
+             {:select [(cond-> [:inline "zqweqwe"]
+                         should-suggest-field-alias (vector :zqweqwe))]
+              :from [:dual]}]}))
+
+     (comment :end))))
