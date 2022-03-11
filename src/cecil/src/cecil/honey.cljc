@@ -424,7 +424,7 @@
       [(apply parse-expression-nodes opts expr)
        (parse-identifier-kw (first alias))]
 
-      (if-let [[expr alias] ; check for `field alias`
+      (if-let [[expr alias] ; check for `expr alias`
                (if (and (= 2 (count nodes))
                         (as-> (nth nodes 1) alias
                               (= [:identifier nil] ((juxt :type :sub-type) alias))))
@@ -433,8 +433,8 @@
         (do
           (mapv parse-expression-nodes (repeat opts) nodes))
 
-        (do
-          (apply parse-expression-nodes opts nodes))))))
+        [(apply parse-expression-nodes opts nodes)
+         :anonymous_expresssion]))))
 
 (defn- parse-select-list
   [opts {:keys [nodes]}]

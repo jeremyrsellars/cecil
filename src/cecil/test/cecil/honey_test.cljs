@@ -58,7 +58,7 @@
                                                               node)))))))))))
 
 (deftest honey-converts-sql-text-to-HoneySQL-data
-  (let [test-filter-pattern (if false #"suggested field aliases" #".")]
+  (let [test-filter-pattern (if false #"no suggested field for" #".")]
    (letfn [(test-convert
              ;([sql expected-ast](test-convert nil sql expected-ast)
              ([why-msg sql      expected-ast]     (test-convert why-msg sql nil expected-ast))
@@ -388,7 +388,7 @@
         {:select
          [:*
           :BR.*
-          {:select [:*] :from [:dual]}]
+          [{:select [:*] :from [:dual]} :anonymous_expresssion]]
          :from [:dual]})
 
      (comment :end))))
