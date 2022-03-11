@@ -369,6 +369,9 @@
              (mapv #(apply parse-from-table-expression-nodes opts %)))]
     results))
 
+(def keyword-alias-replacement-pattern-ref
+  (delay (re-pattern (str "(?i)^(?=(?:" (string/replace standardize/keywords #"\s+" "|") ")$)"))))
+
 (defn- infer-field-alias
  ([nodes](infer-field-alias nodes (comp str first)))
  ([nodes nodes->str-fn]
@@ -390,7 +393,9 @@
     (token-of-type? fd-node :identifier)
     (as-> (parse-expression-node opts fd-node) expr
       (cond-> expr
-        (:should-suggest-field-alias opts) (vector (infer-field-alias nodes (comp last flatten-tokens)))))
+        (and (:should-suggest-field-alias opts)
+             (not (some #(= "*" %) (flatten-tokens nodes))))
+        (vector (infer-field-alias nodes (comp last flatten-tokens)))))
 
     (token-of-keyword? fd-node :null)
     [[:inline nil] :_null]
@@ -445,7 +450,7 @@
     [(into [](mapv keyword (flatten-tokens table-and-maybe-alias)))
      (apply parse-expression-nodes opts expr-nodes)]))
 
-(defmulti assoc-parsed-clause (fn assoc-parsed-clause_dispatch [q clause-kw nodes] clause-kw))
+(defmulti assoc-parsed-clause (fn assoc-parsed-clause_dispatch [opts q clause-kw nodes] clause-kw))
 
 (defn assoc-parsed-join
   [opts q clause-kw nodes]

@@ -381,4 +381,14 @@
           [[:inline "select"] :_select]] ; a SQL keyword probably can't be an alias
          :from [:dual]})
 
+     (test-convert (str "no suggested field for *")
+       "SELECT *, BR.*, (select * from dual)
+       FROM dual"
+        {:should-suggest-field-alias true}
+        {:select
+         [:*
+          :BR.*
+          {:select [:*] :from [:dual]}]
+         :from [:dual]})
+
      (comment :end))))
