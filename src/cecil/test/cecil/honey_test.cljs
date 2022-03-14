@@ -13,6 +13,30 @@
   (:require-macros [devcards.core :as dc :refer [defcard deftest]]
                    [cecil.test-macros :refer [insert-file-contents-string]]))
 
+(deftest flatten-honey-expressions
+  []
+  (letfn [(test-is-nil [x]
+            (is (= (nil? (h/flatten-honey-expressions x)))
+              (str "Should be nil: " x)))
+          (test-is-unchanged [x]
+            (is (= x (h/flatten-honey-expressions x))
+              (str "Shouldn't change: " (pr-str x))))]
+    (test-is-nil nil)
+    (test-is-nil '())
+
+    (test-is-unchanged [1])
+    (test-is-unchanged ["string"])
+    (test-is-unchanged [:keyword])
+    (test-is-unchanged ['symbol])
+    (test-is-unchanged [[:inline 1]])
+    (test-is-unchanged [[:inline 1][:inline 2][:inline 3]])
+
+    (is (as-> [[:inline 1][:inline 2][:inline 3]] x (= x (h/flatten-honey-expressions [x]))))
+    (is (as-> [[:inline 1][:inline 2]] x (= (into x x) (h/flatten-honey-expressions [x x]))))
+    (as-> [[:inline 1][:inline 2]] x
+      (is (= (reduce into x [x x x]) (h/flatten-honey-expressions [x [x [x] x]]))
+        (pr-str (h/flatten-honey-expressions [x [x [x] x]]))))))
+
 (deftest honey_parse-expression-nodes-inner
   (let [number
         {:type :number, :nodes ["123"]}
@@ -319,7 +343,7 @@
        "SELECT R.RCPT_ID      FROM RCPT R       WHERE R.STATUS_CD in (11111, 22222)"
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[[:inline 11111] [:inline 22222]]]]})
+        :where [:in :R.STATUS_CD [[:inline 11111] [:inline 22222]]]})
 
      (test-convert "where in number"       "SELECT R.RCPT_ID      FROM RCPT R      WHERE R.STATUS_CD in ('one')"
        {:select [:R.RCPT_ID]
@@ -330,13 +354,13 @@
        "SELECT R.RCPT_ID       FROM RCPT R      WHERE R.STATUS_CD in ('one', \"two\")"
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[[:inline "one"] [:inline "two"]]]]})
+        :where [:in :R.STATUS_CD [[:inline "one"] [:inline "two"]]]})
 
      (test-convert "where not in numbers"
        "SELECT R.RCPT_ID      FROM RCPT R       WHERE R.STATUS_CD not in (11111, 22222)"
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:not-in :R.STATUS_CD [[[:inline 11111] [:inline 22222]]]]})
+        :where [:not-in :R.STATUS_CD [[:inline 11111] [:inline 22222]]]})
 
      ;; Select union
      (doseq [[desc should-suggest-field-alias]

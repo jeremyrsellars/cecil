@@ -70,6 +70,25 @@
           x)))
     flatten))
 
+(defn flatten-honey-expressions
+  [xs]
+  (->
+    (into []
+      (mapcat identity)
+      (for [x xs]
+        (cond (and (vector? x) (or (= :inline (first x))  (= :raw (first x))))
+              [x]
+
+              (map? x)
+              [x]
+
+              (coll? x)
+              (flatten-honey-expressions x)
+
+              :default
+              [x])))
+    (decorate-source-meta ['flatten-honey-expressions])))
+
 (defn- parse-identifier-kw
   [{:keys [nodes sub-type] :as node}]
  ;{'parse-identifier-kw node :result
@@ -241,7 +260,8 @@
       (parse-expression-node opts (first nodes)))
 
     :more
-    (loop [result-expr nil  ; or should this be nil and check for it below?
+    (loop [op-kw nil
+           result-expr nil  ; or should this be nil and check for it below?
            nodes nodes
            prevent-unwrap false] ;(or (:prevent-unwrap opts) false)]
       (let [[left-nodes [op & right-nodes]]
@@ -255,22 +275,24 @@
            (cond (and (vector? result-expr)
                       (vector? left-expr)
                       (= (first result-expr) (first left-expr))) ; combine [:and [:and expr-a expr-b] expr-c] -> [:and expr-a expr-b expr-c]
-                 (as-> (into result-expr left-expr) x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 1 left-expr :result x (pr-str x))x))
+                 (into result-expr left-expr)
 
                  left-expr
-                 (as-> (conj result-expr left-expr) x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 2 left-expr :result x (pr-str x))x))
+                 (conj result-expr left-expr)
 
                  :default
-                 (as-> result-expr x(do(console-log 'parse-expression-nodes-binary-eq :loop 'not 3 :result x (pr-str x))x))))
-          (let [expr [(parse-operator-kw op)]
+                 result-expr))
+          (let [new-op-kw (or (parse-operator-kw op) op-kw)
+                op-expr [new-op-kw]
                 left-parsed (when (seq left-nodes) (apply parse-expression-nodes-binary-eq (update opts :prevent-unwrap #(or % prevent-unwrap)) left-nodes))
                 new-prevent-unwrap (or prevent-unwrap (contains? prevent-unwrap-keywords (:keyword op)))]
-            (console-log 'parse-expression-nodes-binary-eq :loop 'so left-parsed {:prevent-unwrap prevent-unwrap})
+            (console-log 'parse-expression-nodes-binary-eq opts :loop 'so left-parsed {:prevent-unwrap prevent-unwrap :new-prevent-unwrap new-prevent-unwrap})
             (recur
+              new-op-kw
               (cond
-                result-expr          (into expr (into result-expr left-parsed))
-                left-parsed          (conj expr left-parsed)
-                :default             expr)
+                result-expr          (into op-expr (into result-expr left-parsed))
+                left-parsed          (conj op-expr left-parsed)
+                :default             op-expr)
               right-nodes
               new-prevent-unwrap))))))
 
@@ -301,12 +323,12 @@
                      (apply token-of-keyword? % :or :and ternary-operator-kws)))  ; cheating to save time and future-proof tokenization
               nodes)]
         (if-not op
-          (let [;_ (console-log 'parse-expression-nodes-binary-bin :result result-expr :loop 1 :left-expr (apply parse-expression-nodes-binary-eq left-nodes))
+          (let [;_ (console-log 'parse-expression-nodes-binary-bin opts :result result-expr :loop 1 :left-expr (apply parse-expression-nodes-binary-eq opts left-nodes))
                 left-expr (apply parse-expression-nodes-binary-eq opts left-nodes)]
             (cond->> left-expr
               result-expr (conj result-expr)))
           (if-let [op-kw (ternary-operator-kws (:keyword op))]
-            (let [_ (console-log 'parse-expression-nodes-binary-bin :result result-expr 'ternary op-kw :loop 21)
+            (let [_ (console-log 'parse-expression-nodes-binary-bin opts :result result-expr 'ternary op-kw :loop 21)
                   left-expr (apply parse-expression-nodes-binary-bin opts left-nodes)
                   [ternary-expr new-right-nodes] (parse-ternary opts left-expr op-kw right-nodes)
                   [next-op & next-right-nodes] new-right-nodes]
@@ -414,6 +436,10 @@
     (as-> (parse-expression-node opts fd-node) expr
       (cond-> expr
         (:should-suggest-field-alias opts) (vector (infer-field-alias nodes (comp util/unwrap-string-double first)))))
+
+    (token-of-sub-type? fd-node :expression :parenthetical)
+    [(parse-expression-nodes opts fd-node)
+     :anonymous_expresssion]
 
     :default
     (if-let [[expr as alias] ; check for `field AS alias`
@@ -666,6 +692,15 @@
 
           (cond
             (list? x) (into [] x)
+
+            ; flatten `in` expressions collections [:in expr [[[:inline 1]]]]
+            ; ->                                   [:in expr [[:inline 1]]]
+            (and (vector? x)
+                 (as-> (first x) fst
+                   (or (= fst :in)
+                       (= fst :not-in)))
+                 (coll? (nth x 2)))
+            (update x 2 flatten-honey-expressions)
 
             :default  x)))))))
 
