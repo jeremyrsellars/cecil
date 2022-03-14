@@ -415,4 +415,13 @@
           [{:select [:*] :from [:dual]} :anonymous_expresssion]]
          :from [:dual]})
 
+     ; parameterized queries (bind variables)
+     (test-convert (str "no suggested field for *")
+       "SELECT :a_bindvariable a, (select :b_bindvariable from dual) b
+       FROM dual"
+        {:select
+         [["to-do :a_bindvariable" :a]
+          [{:select ["to-do :b_bindvariable"] :from [:dual]} :b]]
+         :from [:dual]})
+
      (comment :end))))

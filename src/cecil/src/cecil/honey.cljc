@@ -700,6 +700,9 @@
                  (coll? (nth x 2)))
             (update x 2 flatten-honey-expressions)
 
+            (and (keyword? x) (string/starts-with? (name x) ":")) ; an ADO.NET-formatted bind variable like :before_date
+            (apply str "to-do :" (next (name x)))
+
             :default  x)))))))
 
 (defn- transcode-honey-summary
