@@ -269,9 +269,9 @@
       WHERE R.STATUS_CD is null"
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
-        :where  [:=
+        :where  [:is
                   :R.STATUS_CD
-                  [:inline nil]]})
+                  nil]})
 
      (test-convert "where is not null"
        "SELECT R.RCPT_ID
@@ -279,9 +279,9 @@
       WHERE R.STATUS_CD is not null"
        {:select [:R.RCPT_ID]
         :from [[:RCPT :R]]
-        :where  [:not=
+        :where  [:is-not
                   :R.STATUS_CD
-                  [:inline nil]]})
+                  nil]})
 
      ;; Where Between
      (test-convert "where between numbers"

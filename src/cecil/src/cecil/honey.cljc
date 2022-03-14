@@ -145,7 +145,7 @@
 
 (defmethod parse-expression-node {:type :keyword, :keyword :null}
   [opts node]
-  [:inline nil])
+  :null)
 
 (defmethod parse-expression-node {:type :string-double}
   [opts {:keys [nodes] :as node}]
@@ -685,10 +685,7 @@
       (fn post-transcode-walk
         [x]
         (case x
-          :null        [:inline nil]
-
-          :is          :=
-          :is-not      :not=
+          :null        nil
 
           (cond
             (list? x) (into [] x)
