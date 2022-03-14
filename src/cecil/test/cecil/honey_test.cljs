@@ -395,14 +395,14 @@
         {:should-suggest-field-alias true}
         {:select
          [[[:inline "a\""] :a_]
-          [[:inline "123-456-7890"] :_123_456_7890]
+          [[:inline "123-456-7890"] :d123_456_7890]
           [[:inline "replace space"] :replace_space]
           [[:inline "PrEsErVe-CaSe"] :PrEsErVe_CaSe]
-          [[:inline "x12345678901234567890123456789TruncatesTo30Characters"] :x12345678901234567890123456789] ; 30 digits
-          [[:inline "~`!@#$%^&*()_+{}|:\"<>?,./;'[]\\replace non-word characters"] :______________________________] ; 30 underscores
-          [[:inline 0] :_0]
-          [[:inline nil] :_null]
-          [[:inline "select"] :_select]] ; a SQL keyword probably can't be an alias
+          [[:inline "x12345678901234567890123456789TruncatesTo30Characters"] :x12345678901234567890123456789] ; 29 digits
+          [[:inline "~`!@#$%^&*()_+{}|:\"<>?,./;'[]\\replace non-word characters"] :u_____________________________] ; 29 underscores
+          [[:inline 0] :d0]
+          [[:inline nil] :n_null]
+          [[:inline "select"] :k_select]] ; a SQL keyword probably can't be an alias
          :from [:dual]})
 
      (test-convert (str "no suggested field for *")

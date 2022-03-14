@@ -401,8 +401,9 @@
   (-> nodes
       nodes->str-fn
       (string/replace #"\W" "_") ; replace non-word characters with underscore
-      (string/replace #"^(?=\d)" "_") ; can't start an alias with a digit, so insert `_`
-      (string/replace @keyword-alias-replacement-pattern-ref "_")
+      (string/replace #"^(?=_)" "u") ; can't start an alias with a digit or underscore, so insert `n`
+      (string/replace #"^(?=\d)" "d") ; can't start an alias with a digit or underscore, so insert `n`
+      (string/replace @keyword-alias-replacement-pattern-ref "k_") ; the field may not be a keyword, so prefix with 'f_'
       (util/truncate 30)
       keyword)))
 
@@ -420,7 +421,7 @@
         (vector (infer-field-alias nodes (comp last flatten-tokens)))))
 
     (token-of-keyword? fd-node :null)
-    [[:inline nil] :_null]
+    [[:inline nil] :n_null]
 
     (token-of-type? fd-node :number)
     (as-> (parse-expression-node opts fd-node) expr
