@@ -132,6 +132,8 @@
       (re-find #"^\"" s)                     :string-double
       (= "||" s)                             :concatenation
       (re-find #"[<>]+=?" s)                 :inequality
+      (re-find #"(?i)(not\s+)like" s)        :not-like
+      (re-find #"(?i)like" s)                :like
       (re-find #"^\d" s)                     :number)))
 
 (defn flatten-tokens-keep-whitespace

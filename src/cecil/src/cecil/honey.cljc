@@ -55,7 +55,7 @@
 
 (defn binary-operator-token?
   [n]
-  (or (token-of-type? n :equals :not-equals :inequality :not-compare)
+  (or (token-of-type? n :equals :not-equals :inequality :not-compare :like :not-like)
       (token-of-keyword? n :in :not-in :is :is-not)
       (contains? binary-operator-token-nodes (:nodes n))))
 

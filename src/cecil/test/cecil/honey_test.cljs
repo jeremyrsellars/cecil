@@ -242,6 +242,28 @@
                   [:= :R/STATUS_ID [:inline 111]]
                   [:= :R/REASON_CD [:inline 123123]]]})
 
+     (test-convert "where like"
+       "   SELECT R.RCPT_ID, R.RCPT_NUM
+      FROM RCPT R
+      WHERE R.STATUS lIKe \"%pattern%\"
+         AND R.REASON_CD = 123123"
+       {:select [:R/RCPT_ID :R/RCPT_NUM]
+        :from [[:RCPT :R]]
+        :where  [:and
+                  [:like :R/STATUS [:inline "%pattern%"]]
+                  [:= :R/REASON_CD [:inline 123123]]]})
+
+     (test-convert "where not like"
+       "   SELECT R.RCPT_ID, R.RCPT_NUM
+      FROM RCPT R
+      WHERE R.STATUS not lIKe \"%pattern%\"
+         AND R.REASON_CD = 123123"
+       {:select [:R/RCPT_ID :R/RCPT_NUM]
+        :from [[:RCPT :R]]
+        :where  [:and
+                  [:not-like :R/STATUS [:inline "%pattern%"]]
+                  [:= :R/REASON_CD [:inline 123123]]]})
+
      (test-convert "where = 'singlestring' literal"
        "SELECT R.RCPT_ID
       FROM RCPT R
