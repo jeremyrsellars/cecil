@@ -545,7 +545,7 @@
                (parse-from-etc opts q1-from))]
     (if (empty? set-op)
       query
-      (let [set-op-kw (->> set-op flatten-tokens (string/join "-") keyword)
+      (let [set-op-kw (->> set-op flatten-tokens (map string/lower-case) (string/join "-") keyword)
             query2 (parse-selects opts
                                   (if (next -rest)
                                     {:type ::additional-select :nodes -rest}

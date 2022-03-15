@@ -367,11 +367,29 @@
              {"and suggest field alias" true
               "but do not suggest field alias" false}]
        (test-convert (str "select ... union all select, " desc)
-         "SELECT 'asdfljkdfsa' as dummy FROM dual union all
+         "SELECT 'asdfljkdfsa' as dummy FROM dual UNION ALL
           SELECT dual.dummy FROM dual       union all
           SELECT 'zqweqwe' FROM dual"
           {:should-suggest-field-alias should-suggest-field-alias}
           {:union-all
+            [{:select [[[:inline "asdfljkdfsa"] :dummy]]
+              :from [:dual]}
+             {:select [(cond-> :dual/dummy
+                         should-suggest-field-alias (vector :dummy))]
+              :from [:dual]}
+             {:select [(cond-> [:inline "zqweqwe"]
+                         should-suggest-field-alias (vector :zqweqwe))]
+              :from [:dual]}]}))
+
+     (doseq [[desc should-suggest-field-alias]
+             {"and suggest field alias" true
+              "but do not suggest field alias" false}]
+       (test-convert (str "select ... union select, " desc)
+         "SELECT 'asdfljkdfsa' as dummy FROM dual union
+          SELECT dual.dummy FROM dual       UNion
+          SELECT 'zqweqwe' FROM dual"
+          {:should-suggest-field-alias should-suggest-field-alias}
+          {:union
             [{:select [[[:inline "asdfljkdfsa"] :dummy]]
               :from [:dual]}
              {:select [(cond-> :dual/dummy
