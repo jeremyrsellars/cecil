@@ -131,17 +131,17 @@
 
      (test-convert "dual - qualified field no alias"
         "select dual.dummy from dual"
-         {:select [:dual.dummy]
+         {:select [:dual/dummy]
           :from [:dual]})
 
      (test-convert "dual - qualified field w/ alias"
         "select dual.dummy x from dual"
-         {:select [[:dual.dummy :x]]
+         {:select [[:dual/dummy :x]]
           :from [:dual]})
 
      (test-convert "dual - qualified field as alias"
         "select dual.dummy as x from dual"
-         {:select [[:dual.dummy :x]]
+         {:select [[:dual/dummy :x]]
           :from [:dual]})
 
      (test-convert "1 number field w/ alias"
@@ -152,54 +152,54 @@
 
      (test-convert "dual - qualified table, qualified field no alias"
         "select d.dummy from dual d"
-         {:select [:d.dummy]
+         {:select [:d/dummy]
           :from [[:dual :d]]})
 
      (test-convert "dual - qualified table, qualified field w/ alias"
         "select d.dummy x from dual d"
-         {:select [[:d.dummy :x]]
+         {:select [[:d/dummy :x]]
           :from [[:dual :d]]})
 
      (test-convert "dual - qualified table, qualified field w/ as alias"
         "select d.dummy as x from dual d"
-         {:select [[:d.dummy :x]]
+         {:select [[:d/dummy :x]]
           :from [[:dual :d]]})
 
      (test-convert "2 tables w/ aliases"
         "select a.dummy as a, b.dummy b from dual a, dual b"
         {:select
-           [[:a.dummy :a]
-            [:b.dummy :b]]
+           [[:a/dummy :a]
+            [:b/dummy :b]]
          :from [[:dual :a]
                 [:dual :b]]})
 
      (test-convert "2 tables w/ aliases"
         "select a.dummy as a, b.dummy b from apple a, banana b"
         {:select
-           [[:a.dummy :a]
-            [:b.dummy :b]]
+           [[:a/dummy :a]
+            [:b/dummy :b]]
          :from [[:apple :a]
                 [:banana :b]]})
 
      (test-convert "2 fields"
         "select cat.cat_id,cat.cat_id as ITEM_PRIMARY from feline cat"
         {:select
-           [:cat.cat_id
-            [:cat.cat_id :ITEM_PRIMARY]]
+           [:cat/cat_id
+            [:cat/cat_id :ITEM_PRIMARY]]
          :from
            [[:feline :cat]]})
 
      (test-convert "where & order by"
        "select r.* from re r where r.r > 9879823 order by r.a, r.b"
        {:select
-          [:r.*]
+          [:r/*]
         :from
           [[:re :r]]
         :where
-           [:> :r.r [:inline 9879823]]
+           [:> :r/r [:inline 9879823]]
         :order-by
-          [:r.a
-           :r.b]})
+          [:r/a
+           :r/b]})
 
      (test-convert "; leading comment"
         "; leading comment
@@ -236,30 +236,30 @@
       FROM RCPT R
       WHERE R.STATUS_ID = 111
          AND R.REASON_CD = 123123"
-       {:select [:R.RCPT_ID :R.RCPT_NUM]
+       {:select [:R/RCPT_ID :R/RCPT_NUM]
         :from [[:RCPT :R]]
         :where  [:and
-                  [:= :R.STATUS_ID [:inline 111]]
-                  [:= :R.REASON_CD [:inline 123123]]]})
+                  [:= :R/STATUS_ID [:inline 111]]
+                  [:= :R/REASON_CD [:inline 123123]]]})
 
      (test-convert "where = 'singlestring' literal"
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.name = 'hi'"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:=
-                  :R.name
+                  :R/name
                   [:inline "hi"]]})
 
      (test-convert "where = \"doublestring\" literal"
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.name = 'hi'"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:=
-                  :R.name
+                  :R/name
                   [:inline "hi"]]})
 
      ;; Where is
@@ -267,20 +267,20 @@
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.STATUS_CD is null"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:is
-                  :R.STATUS_CD
+                  :R/STATUS_CD
                   nil]})
 
      (test-convert "where is not null"
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.STATUS_CD is not null"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:is-not
-                  :R.STATUS_CD
+                  :R/STATUS_CD
                   nil]})
 
      ;; Where Between
@@ -288,10 +288,10 @@
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.STATUS_CD between 111 and 222"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:between
-                  :R.STATUS_CD
+                  :R/STATUS_CD
                   [:inline 111]
                   [:inline 222]]})
 
@@ -299,10 +299,10 @@
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.STATUS_CD between (111 + 0) and (222 + 0)"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:between
-                  :R.STATUS_CD
+                  :R/STATUS_CD
                   [:+ [:inline 111] [:inline 0]]
                   [:+ [:inline 222] [:inline 0]]]})
 
@@ -310,13 +310,13 @@
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE 1 = 1 and R.STATUS_CD between 111 + 0 and 222 + 0 and 2 = 2"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where [:and
                 [:and ; to-do: consider flattening and..and
                   [:= [:inline 1] [:inline 1]]
                   [:between
-                    :R.STATUS_CD
+                    :R/STATUS_CD
                     [:+ [:inline 111] [:inline 0]]
                     [:+ [:inline 222] [:inline 0]]]]
                 [:= [:inline 2] [:inline 2]]]})
@@ -325,42 +325,42 @@
        "SELECT R.RCPT_ID
       FROM RCPT R
       WHERE R.STATUS_CD between (select 111 from dual) and (select 222 from dual)"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
         :where  [:between
-                  :R.STATUS_CD
+                  :R/STATUS_CD
                   {:select [[:inline 111]] :from [:dual]}
                   {:select [[:inline 222]] :from [:dual]}]})
 
      ;; Where in
      (test-convert "where in number"
        "SELECT R.RCPT_ID      FROM RCPT R      WHERE R.STATUS_CD in (1111)"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[:inline 1111]]]})
+        :where [:in :R/STATUS_CD [[:inline 1111]]]})
 
      (test-convert "where in numbers"
        "SELECT R.RCPT_ID      FROM RCPT R       WHERE R.STATUS_CD in (11111, 22222)"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[:inline 11111] [:inline 22222]]]})
+        :where [:in :R/STATUS_CD [[:inline 11111] [:inline 22222]]]})
 
      (test-convert "where in number"       "SELECT R.RCPT_ID      FROM RCPT R      WHERE R.STATUS_CD in ('one')"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[:inline "one"]]]})
+        :where [:in :R/STATUS_CD [[:inline "one"]]]})
 
      (test-convert "where in strings"
        "SELECT R.RCPT_ID       FROM RCPT R      WHERE R.STATUS_CD in ('one', \"two\")"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:in :R.STATUS_CD [[:inline "one"] [:inline "two"]]]})
+        :where [:in :R/STATUS_CD [[:inline "one"] [:inline "two"]]]})
 
      (test-convert "where not in numbers"
        "SELECT R.RCPT_ID      FROM RCPT R       WHERE R.STATUS_CD not in (11111, 22222)"
-       {:select [:R.RCPT_ID]
+       {:select [:R/RCPT_ID]
         :from [[:RCPT :R]]
-        :where [:not-in :R.STATUS_CD [[:inline 11111] [:inline 22222]]]})
+        :where [:not-in :R/STATUS_CD [[:inline 11111] [:inline 22222]]]})
 
      ;; Select union
      (doseq [[desc should-suggest-field-alias]
@@ -374,7 +374,7 @@
           {:union-all
             [{:select [[[:inline "asdfljkdfsa"] :dummy]]
               :from [:dual]}
-             {:select [(cond-> :dual.dummy
+             {:select [(cond-> :dual/dummy
                          should-suggest-field-alias (vector :dummy))]
               :from [:dual]}
              {:select [(cond-> [:inline "zqweqwe"]
@@ -411,7 +411,7 @@
         {:should-suggest-field-alias true}
         {:select
          [:*
-          :BR.*
+          :BR/*
           [{:select [:*] :from [:dual]} :anonymous_expresssion]]
          :from [:dual]})
 

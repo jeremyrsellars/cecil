@@ -703,6 +703,9 @@
             (and (keyword? x) (string/starts-with? (name x) ":")) ; an ADO.NET-formatted bind variable like :before_date
             (apply str "to-do :" (next (name x)))
 
+            (and (simple-keyword? x) (re-find #"\w\." (name x)))
+            (-> (name x) (string/replace-first #"\." "/") keyword)
+
             :default  x)))))))
 
 (defn- transcode-honey-summary
